@@ -4,180 +4,175 @@ import subprocess
 import json
 import shutil
 import time
+import allure # For attaching files to Allure reports
 
-# --- Templates for minimal Next.js and shadcn/ui structure ---
-
-SHADCN_COMPONENTS_TO_ADD = [
-    "accordion", "alert-dialog", "aspect-ratio", "avatar", "badge", "button",
-    "calendar", "card", "checkbox", "collapsible", "command", "context-menu",
-    "dialog", "dropdown-menu", "form", "input", "label", "menubar",
-    "navigation-menu", "popover", "progress", "radio-group", "scroll-area",
-    "select", "separator", "sheet", "skeleton", "slider", "sonner", "switch",
-    "table", "tabs", "textarea", "toast", "toggle", "tooltip", "carousel"
-]
-
-PACKAGE_JSON_TEMPLATE = """
-{
-  "name": "nextjs-site",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
-  "dependencies": {
-    "next": "latest",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
+# Dependencies to add or ensure specific versions for, on top of what create-next-app installs.
+# Using React 18 for stability with the ecosystem.
+ADDITIONAL_DEPENDENCIES = {
     "lucide-react": "latest",
     "framer-motion": "latest",
-    "react-hook-form": "latest",
-    "class-variance-authority": "latest",
-    "clsx": "latest",
-    "tailwind-merge": "latest",
-    "tailwindcss-animate": "latest",
+    "class-variance-authority": "latest", 
+    "clsx": "latest", 
+    "tailwind-merge": "latest", 
     "react-intersection-observer": "latest",
-    "sonner": "latest",
-    "date-fns": "latest",
-    "@dnd-kit/core": "latest",
+    "sonner": "latest", 
+    "date-fns": "latest", 
+    "@dnd-kit/core": "latest", 
     "@dnd-kit/sortable": "latest",
     "@dnd-kit/modifiers": "latest",
-    "next-themes": "latest",
-    "recharts": "latest"
-  },
-  "devDependencies": {
-    "typescript": "latest",
-    "@types/node": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "autoprefixer": "latest",
-    "postcss": "latest",
-    "tailwindcss": "3.4.3",
-    "eslint": "latest",
-    "eslint-config-next": "latest",
-    "eslint-plugin-prettier": "latest",
-    "eslint-config-prettier": "latest",
+    "next-themes": "latest", 
+    "recharts": "latest", 
+    "react": "^18.2.0", 
+    "react-dom": "^18.2.0", 
+    "cmdk": "^1.0.0", 
+    "embla-carousel-react": "^8.0.0", 
+    "@radix-ui/react-slot": "^1.0.2", 
+    "zod": "^3.23.0", 
+    "@hookform/resolvers": "^3.0.0", 
+    "react-hook-form": "latest", 
+}
+
+ADDITIONAL_DEV_DEPENDENCIES = {
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "prettier": "latest",
     "prettier-plugin-tailwindcss": "latest",
-    "@next/codemod": "latest",
-    "tailwindcss": "^4"
-  }
+    "tailwindcss-animate": "latest", 
 }
-"""
 
-TSCONFIG_JSON_TEMPLATE = """
-{
-  "compilerOptions": {
-    "target": "es2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
-    "allowJs": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "forceConsistentCasingInFileNames": true,
-    "noEmit": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "isolatedModules": true,
-    "jsx": "preserve",
-    "incremental": true,
-    "plugins": [
-      {
-        "name": "next"
-      }
-    ],
-    "paths": {
-      "@/*": ["./src/*"],
-      "@/components/*": ["./src/components/*"],
-      "@/lib/*": ["./src/lib/*"],
-      "@/app/*": ["./src/app/*"],
-      "@/hooks/*": ["./src/hooks/*"]
-    }
-  },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
-}
-"""
+# --- Templates for essential configuration and placeholder files ---
 
-NEXT_CONFIG_JS_TEMPLATE = """
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-    images: {
-        remotePatterns: [
-            { protocol: 'https', hostname: 'images.unsplash.com', port: '', pathname: '**' },
-            { protocol: 'https', hostname: 'plus.unsplash.com', port: '', pathname: '**' },
-            { protocol: 'https', hostname: 'tailwindui.com', port: '', pathname: '**' }
-        ],
-    },
-    eslint: {
-        ignoreDuringBuilds: true,
-    },
-    typescript: {
-        ignoreBuildErrors: true,
-    }
-};
-module.exports = nextConfig;
-"""
+# components.json is NOT created by us before shadcn init. shadcn init will create it.
 
-POSTCSS_CONFIG_JS_TEMPLATE = """
-module.exports = {
-  plugins: {
-    tailwindcss: {},
-    autoprefixer: {},
-  },
-};
-"""
+# This TAILWIND_CONFIG_TS_TEMPLATE is now primarily for reference, 
+# as we will rely on shadcn init/add to generate/update the actual tailwind.config.ts.
+# If issues persist, we might revert to overwriting with this, but only as a last resort.
+TAILWIND_CONFIG_TS_REFERENCE_TEMPLATE = """ 
+import type { Config } from 'tailwindcss'
 
-TAILWIND_CONFIG_JS_TEMPLATE = """
-const { fontFamily } = require("tailwindcss/defaultTheme");
-
-/** @type {import('tailwindcss').Config} */
-module.exports = {
+const config: Config = {
   darkMode: ["class"],
   content: [
-    './pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
   ],
+  prefix: "",
   theme: {
     container: {
       center: true,
       padding: "2rem",
-      screens: { "2xl": "1400px" },
+      screens: {
+        "2xl": "1400px",
+      },
     },
     extend: {
-      colors: {
-        border: "hsl(var(--border))", input: "hsl(var(--input))", ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))", foreground: "hsl(var(--foreground))",
-        primary: { DEFAULT: "hsl(var(--primary))", foreground: "hsl(var(--primary-foreground))" },
-        secondary: { DEFAULT: "hsl(var(--secondary))", foreground: "hsl(var(--secondary-foreground))" },
-        destructive: { DEFAULT: "hsl(var(--destructive))", foreground: "hsl(var(--destructive-foreground))" },
-        muted: { DEFAULT: "hsl(var(--muted))", foreground: "hsl(var(--muted-foreground))" },
-        accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
-        popover: { DEFAULT: "hsl(var(--popover))", foreground: "hsl(var(--popover-foreground))" },
-        card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
+      colors: { 
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
       },
-      borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
+      borderRadius: { 
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
       keyframes: {
-        "accordion-down": { from: { height: "0" }, to: { height: "var(--radix-accordion-content-height)" } },
-        "accordion-up": { from: { height: "var(--radix-accordion-content-height)" }, to: { height: "0" } },
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
+        },
       },
-      animation: { "accordion-down": "accordion-down 0.2s ease-out", "accordion-up": "accordion-up 0.2s ease-out" },
-      fontFamily: { sans: ["var(--font-sans)", ...fontFamily.sans] },
+      animation: {
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
+      },
     },
   },
   plugins: [require("tailwindcss-animate")],
-};
+}
+export default config
+"""
+
+# This APP_GLOBALS_CSS_TEMPLATE is also for reference.
+# We will rely on shadcn init/add to correctly populate globals.css.
+# If that fails, we might need to overwrite with this.
+APP_GLOBALS_CSS_REFERENCE_TEMPLATE = """
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    /* ... all other css variables ... */
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 222.2 84% 4.9%;
+    --radius: 0.5rem;
+  }
+ 
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    /* ... all other dark mode css variables ... */
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 212.7 26.8% 83.9%;
+  }
+}
+ 
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1; 
+  }
+}
 """
 
 APP_LAYOUT_TSX_TEMPLATE = """
 import './globals.css';
 import { Inter as FontSans } from 'next/font/google';
 import { cn } from '@/lib/utils';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/components/ui/sonner'; 
 import { ThemeProvider } from '@/components/theme-provider';
 
 const fontSans = FontSans({
@@ -218,25 +213,6 @@ export default function RootLayout({
 }
 """
 
-COMPONENTS_JSON_TEMPLATE = """
-{
-  "$schema": "https://ui.shadcn.com/schema.json",
-  "style": "default",
-  "rsc": true,
-  "tsx": true,
-  "tailwind": {
-    "config": "tailwind.config.js",
-    "css": "src/app/globals.css",
-    "baseColor": "slate",
-    "cssVariables": true
-  },
-  "aliases": {
-    "components": "@/components",
-    "utils": "@/lib/utils"
-  }
-}
-"""
-
 APP_PAGE_TSX_TEMPLATE = """
 export default function HomePage() {
   return (
@@ -252,63 +228,6 @@ export default function HomePage() {
 }
 """
 
-
-APP_GLOBALS_CSS_TEMPLATE = """
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-  }
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-  }
-}
-@layer base {
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground; }
-}
-"""
-
 LIB_UTILS_TS_TEMPLATE = """
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
@@ -318,64 +237,26 @@ export function cn(...inputs: ClassValue[]) {
 }
 """
 
-ESLINTRC_JSON_TEMPLATE = """
-{
-  "root": true,
-  "extends": ["next/core-web-vitals", "prettier"],
-  "rules": {
-    "react/no-unescaped-entities": "off"
-  }
-}
-"""
-
 COMPONENTS_THEME_PROVIDER_TEMPLATE = """
 "use client"
-
 import * as React from "react"
-import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes"
+import { ThemeProvider as NextThemesProvider, type ThemeProviderProps } from "next-themes";
 
 export function ThemeProvider({ children, ...props }: ThemeProviderProps) {
   return <NextThemesProvider {...props}>{children}</NextThemesProvider>
 }
 """
 
-USE_KEY_PRESS_TEMPLATE = """
-import { useEffect, useCallback } from 'react';
-
-export function useKeyPress(targetKey: string, handler: () => void) {
-  const handleKeyPress = useCallback((event: KeyboardEvent) => {
-    if (event.key === targetKey) {
-      handler();
-    }
-  }, [handler, targetKey]);
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyPress);
-    return () => {
-      window.removeEventListener('keydown', handleKeyPress);
-    };
-  }, [handleKeyPress]);
-}
-"""
-
 MODE_TOGGLE_TEMPLATE = """
 "use client"
-
 import * as React from "react"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
-
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import { Button } from "@/components/ui/button" 
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export function ModeToggle() {
   const { setTheme } = useTheme()
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -386,21 +267,14 @@ export function ModeToggle() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>
-          Light
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>
-          Dark
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>
-          System
-        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("light")}>Light</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>Dark</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")}>System</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 """
-
 
 HEADER_PLACEHOLDER_TEMPLATE = """
 "use client";
@@ -427,6 +301,7 @@ export function Header() {
 
 FOOTER_PLACEHOLDER_TEMPLATE = """
 "use client";
+
 export function Footer() {
   return (
     <footer className="p-4 border-t text-center text-sm text-muted-foreground">
@@ -436,145 +311,329 @@ export function Footer() {
 }
 """
 
+USE_KEY_PRESS_TEMPLATE = """
+import { useEffect, useCallback } from 'react';
+
+export function useKeyPress(targetKey: string, handler: () => void) {
+  const handleKeyPress = useCallback((event: KeyboardEvent) => {
+    if (event.key === targetKey) {
+      handler();
+    }
+  }, [handler, targetKey]);
+
+  useEffect(() => {
+    window.addEventListener('keydown', handleKeyPress);
+    return () => {
+      window.removeEventListener('keydown', handleKeyPress);
+    };
+  }, [handleKeyPress]);
+}
+"""
+
 
 def _create_file_with_content(filepath: str, content: str, results_dict: dict, file_description: str):
+    """Helper function to create a file with given content."""
     try:
         os.makedirs(os.path.dirname(filepath), exist_ok=True)
-        file_content_to_write = content.strip() if not file_description.startswith("AI-generated file") else content
+        file_content_to_write = content if file_description.startswith("AI-generated file") else content.strip()
         with open(filepath, 'w', encoding='utf-8') as f:
-            f.write(file_content_to_write)
+            f.write(file_content_to_write + ('\n' if not file_description.startswith("AI-generated file") else ''))
     except Exception as e:
         error_msg = f"Error creating/writing file {file_description} ({filepath}): {e}"
         print(f"ERROR: {error_msg}")
-        if "error_messages" in results_dict:
-            results_dict["error_messages"].append(error_msg)
+        if "error_messages" not in results_dict: results_dict["error_messages"] = []
+        results_dict["error_messages"].append(error_msg)
 
+def _run_command_util(cmd_list_or_str, cwd, results_dict, timeout=120, check_on_error=True, command_name="Command", log_output=True, shell=False, std_input=None):
+    """Utility to run a shell command and capture its output. Can take a list or a string (if shell=True)."""
+    if shell and not isinstance(cmd_list_or_str, str):
+        raise ValueError("cmd_list_or_str must be a string if shell=True")
+    if not shell and not isinstance(cmd_list_or_str, list):
+        raise ValueError("cmd_list_or_str must be a list if shell=False")
 
-def create_nextjs_boilerplate(site_dir, results):
-    print(f"[{time.strftime('%H:%M:%S')}] Creating Next.js boilerplate in {site_dir}...")
-    os.makedirs(os.path.join(site_dir, 'src', 'app'), exist_ok=True)
-    os.makedirs(os.path.join(site_dir, 'src', 'lib'), exist_ok=True)
-    os.makedirs(os.path.join(site_dir, 'src', 'components', 'ui'), exist_ok=True) 
-    os.makedirs(os.path.join(site_dir, 'src', 'components'), exist_ok=True)     
-    os.makedirs(os.path.join(site_dir, 'src', 'hooks'), exist_ok=True)
-
-    _create_file_with_content(
-        os.path.join(site_dir, 'next-env.d.ts'),
-        '/// <reference types="next" />\n/// <reference types="next/image-types/global" />\n\n',
-        results, "next-env.d.ts"
-    )
-
-    files_to_create_root = {
-        'package.json': PACKAGE_JSON_TEMPLATE,
-        'tsconfig.json': TSCONFIG_JSON_TEMPLATE,
-        'next.config.js': NEXT_CONFIG_JS_TEMPLATE,
-        'postcss.config.js': POSTCSS_CONFIG_JS_TEMPLATE,
-        'tailwind.config.js': TAILWIND_CONFIG_JS_TEMPLATE,
-        '.eslintrc.json': ESLINTRC_JSON_TEMPLATE,
-        'components.json': COMPONENTS_JSON_TEMPLATE,
-    } # Disabled the rule for apostrophes
-    for filename, content in files_to_create_root.items():
-        _create_file_with_content(os.path.join(site_dir, filename), content, results, filename)
-
-    app_files_to_create = {
-        'layout.tsx': APP_LAYOUT_TSX_TEMPLATE,
-        'globals.css': APP_GLOBALS_CSS_TEMPLATE,
-        'page.tsx': APP_PAGE_TSX_TEMPLATE,
-    }
-    for filename, content in app_files_to_create.items():
-        _create_file_with_content(os.path.join(site_dir, 'src', 'app', filename), content, results, f"src/app/{filename}")
-
-    _create_file_with_content(os.path.join(site_dir, 'src', 'lib', 'utils.ts'), LIB_UTILS_TS_TEMPLATE, results, "src/lib/utils.ts")
+    display_cmd = cmd_list_or_str if isinstance(cmd_list_or_str, str) else ' '.join(cmd_list_or_str)
+    print(f"[{time.strftime('%H:%M:%S')}] Running: {display_cmd} (timeout: {timeout}s) in '{cwd}' (shell={shell})")
     
-    placeholders = {
-        os.path.join(site_dir, 'src', 'components', 'theme-provider.tsx'): COMPONENTS_THEME_PROVIDER_TEMPLATE,
-        os.path.join(site_dir, 'src', 'hooks', 'use-key-press.ts'): USE_KEY_PRESS_TEMPLATE,
-        os.path.join(site_dir, 'src', 'components', 'Header.tsx'): HEADER_PLACEHOLDER_TEMPLATE,
-        os.path.join(site_dir, 'src', 'components', 'Footer.tsx'): FOOTER_PLACEHOLDER_TEMPLATE,
-        os.path.join(site_dir, 'src', 'components', 'mode-toggle.tsx'): MODE_TOGGLE_TEMPLATE, # Added placeholder
-    }
-    for filepath, template in placeholders.items():
-        _create_file_with_content(filepath, template, results, f"placeholder: {os.path.relpath(filepath, site_dir)}")
-    print(f"[{time.strftime('%H:%M:%S')}] Boilerplate creation finished.")
+    try:
+        env = os.environ.copy()
+        process_input_bytes = std_input.encode() if std_input else None
 
+        process = subprocess.run(
+            cmd_list_or_str, 
+            cwd=cwd, 
+            shell=shell,
+            capture_output=True, 
+            text=(not process_input_bytes), 
+            input=process_input_bytes,
+            encoding='utf-8' if not process_input_bytes else None,
+            errors='replace' if not process_input_bytes else None,
+            check=False, 
+            timeout=timeout, 
+            env=env
+        )
+        
+        stdout_val = process.stdout
+        stderr_val = process.stderr
 
-def process_generated_site(tesslate_response_content: str, site_dir: str):
-    results = {
-        "build_success": False,
-        "npm_install_success": False,
-        "shadcn_add_success": False, 
-        "prettier_modified_files": 0,
-        "llm_syntax_fixes_applied": 0,
-        "error_messages": [],
-        "site_path": site_dir,
-        "command_outputs": []
-    }
+        if process_input_bytes: 
+            stdout_val = stdout_val.decode(encoding='utf-8', errors='replace') if stdout_val else ""
+            stderr_val = stderr_val.decode(encoding='utf-8', errors='replace') if stderr_val else ""
+        
+        if "command_outputs" not in results_dict: results_dict["command_outputs"] = []
+        results_dict["command_outputs"].append((command_name, stdout_val, stderr_val))
 
-    def _run_command(cmd_list, cwd, timeout=120, check_on_error=True, command_name="Command", log_output=True):
-        print(f"[{time.strftime('%H:%M:%S')}] Running: {' '.join(cmd_list)} (timeout: {timeout}s)")
+        stdout_strip = stdout_val.strip() if stdout_val else ""
+        stderr_strip = stderr_val.strip() if stderr_val else ""
+
+        if log_output and stdout_strip: print(f"[{time.strftime('%H:%M:%S')}] {command_name} STDOUT:\n{stdout_strip}")
+        if log_output and stderr_strip: print(f"[{time.strftime('%H:%M:%S')}] {command_name} STDERR:\n{stderr_strip}")
+
+        if check_on_error and process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, cmd_list_or_str, output=stdout_val, stderr=stderr_val)
+        print(f"[{time.strftime('%H:%M:%S')}] {command_name} completed (Return Code: {process.returncode}).")
+        return process
+    except subprocess.CalledProcessError as e:
+        error_msg = f"{command_name} failed with return code {e.returncode}."
+        print(f"[{time.strftime('%H:%M:%S')}] ERROR: {error_msg}")
+        if "error_messages" not in results_dict: results_dict["error_messages"] = []
+        results_dict["error_messages"].append(f"{error_msg} (See 'All Command Outputs')")
+        return None
+    except subprocess.TimeoutExpired as e:
+        error_msg = f"{command_name} timed out after {timeout} seconds."
+        print(f"[{time.strftime('%H:%M:%S')}] ERROR: {error_msg}")
+        if "error_messages" not in results_dict: results_dict["error_messages"] = []
+        results_dict["error_messages"].append(error_msg)
+        partial_stdout_timeout = e.stdout.decode(encoding='utf-8', errors='replace') if isinstance(e.stdout, bytes) else e.stdout
+        partial_stderr_timeout = e.stderr.decode(encoding='utf-8', errors='replace') if isinstance(e.stderr, bytes) else e.stderr
+        if "command_outputs" not in results_dict: results_dict["command_outputs"] = []
+        results_dict["command_outputs"].append((f"{command_name} (Timeout)", partial_stdout_timeout or "", partial_stderr_timeout or ""))
+        return None
+    except FileNotFoundError:
+        cmd_to_report_fnf = cmd_list_or_str if isinstance(cmd_list_or_str, str) else cmd_list_or_str[0]
+        error_msg = f"'{cmd_to_report_fnf}' command not found. Ensure it's in PATH. Current PATH: {os.environ.get('PATH', 'Not set')}"
+        print(f"[{time.strftime('%H:%M:%S')}] ERROR: {error_msg}")
+        if "error_messages" not in results_dict: results_dict["error_messages"] = []
+        results_dict["error_messages"].append(error_msg)
+        return None
+    except Exception as e:
+        error_msg = f"An unexpected error occurred during {command_name}: {type(e).__name__} - {str(e)}"
+        print(f"[{time.strftime('%H:%M:%S')}] ERROR: {error_msg}")
+        if "error_messages" not in results_dict: results_dict["error_messages"] = []
+        results_dict["error_messages"].append(error_msg)
+        return None
+
+def setup_project_environment(base_tmp_dir: str, project_folder_name: str, results: dict) -> str | None:
+    """
+    Creates a Next.js project using create-next-app and configures it.
+    """
+    project_path = os.path.join(base_tmp_dir, project_folder_name)
+
+    if os.path.exists(project_path):
+        shutil.rmtree(project_path)
+
+    cna_flags = [
+        project_folder_name, '--ts', '--tailwind', '--eslint', '--app', '--src-dir',
+        '--import-alias', '@/*', '--use-yarn', '--skip-git', 
+        '--no-install', # We run yarn install after modifying package.json
+        '--no-turbopack'
+    ]
+    cna_cmd_list = ['npx', '-y', 'create-next-app@latest'] + cna_flags
+    
+    print(f"[{time.strftime('%H:%M:%S')}] Running create-next-app to scaffold '{project_folder_name}'...")
+    cna_process = _run_command_util(cna_cmd_list, cwd=base_tmp_dir, results_dict=results, timeout=300, command_name="create-next-app scaffolding")
+
+    if not cna_process or cna_process.returncode != 0:
+        results["cna_success"] = False
+        return None
+    results["cna_success"] = True
+    print(f"[{time.strftime('%H:%M:%S')}] create-next-app scaffolding completed. Project path: {project_path}")
+    
+    # Ensure eslint.ignoreDuringBuilds in next.config file
+    next_config_filenames = ['next.config.mjs', 'next.config.js', 'next.config.ts']
+    actual_next_config_path = None
+    actual_next_config_filename = None
+    for filename_iter_nc in next_config_filenames:
+        temp_path_nc = os.path.join(project_path, filename_iter_nc)
+        if os.path.exists(temp_path_nc):
+            actual_next_config_path = temp_path_nc
+            actual_next_config_filename = filename_iter_nc
+            break
+    
+    if actual_next_config_path:
+        print(f"[{time.strftime('%H:%M:%S')}] Found Next.js config file: {actual_next_config_filename}")
         try:
-            process = subprocess.run(
-                cmd_list, cwd=cwd, capture_output=True, text=True, encoding='utf-8',
-                errors='replace', check=False, timeout=timeout
-            )
-            results["command_outputs"].append((command_name, process.stdout, process.stderr))
+            with open(actual_next_config_path, 'r+', encoding='utf-8') as f_nc:
+                content_nc = f_nc.read()
+                original_content_nc = str(content_nc)
+                
+                if not re.search(r"eslint\s*:\s*{\s*[^}]*?\bignoreDuringBuilds\s*:\s*true\b[^}]*}", content_nc, re.DOTALL):
+                    eslint_block_text = "eslint: {\n    ignoreDuringBuilds: true,\n  },"
+                    if "eslint:" in content_nc:
+                        content_nc, num_replacements_nc = re.subn(r"(\beslint\s*:\s*{)([^}]*?)(\bignoreDuringBuilds\s*:\s*)false([^}]*})", r"\1\2\3true\4", content_nc, flags=re.DOTALL)
+                        if num_replacements_nc == 0 and "ignoreDuringBuilds: true" not in content_nc:
+                             content_nc = re.sub(r"(\beslint\s*:\s*{)", r"\1\n    ignoreDuringBuilds: true,", content_nc, flags=re.DOTALL)
+                    else: 
+                        config_patterns_nc = [
+                            (r"(const\s+\w+\s*:\s*(?:import\([^)]+\)\.)?Config\s*=\s*{)", r"\1\n  {eslint_block}"),
+                            (r"(const\s+\w+\s*=\s*{)", r"\1\n  {eslint_block}"),
+                            (r"(export\s+default\s*{)", r"\1\n  {eslint_block}"),
+                            (r"(module\.exports\s*=\s*{)", r"\1\n  {eslint_block}")
+                        ]; added_eslint_block_nc = False
+                        for p_nc, rep_nc in config_patterns_nc:
+                            new_content_nc, n_s_nc = re.subn(p_nc, rep_nc.format(eslint_block=eslint_block_text), content_nc, 1)
+                            if n_s_nc > 0: content_nc = new_content_nc; added_eslint_block_nc = True; break
+                        if not added_eslint_block_nc: results["error_messages"].append(f"Could not reliably add eslint.ignoreDuringBuilds to {actual_next_config_filename}")
+                    
+                    if content_nc != original_content_nc:
+                        f_nc.seek(0); f_nc.write(content_nc); f_nc.truncate()
+                        if "ignoreDuringBuilds: true" in content_nc: print(f"[{time.strftime('%H:%M:%S')}] Ensured eslint.ignoreDuringBuilds = true in {actual_next_config_filename}")
+                        else: print(f"[{time.strftime('%H:%M:%S')}] Attempted to modify {actual_next_config_filename} for ESLint, but 'ignoreDuringBuilds: true' not confirmed present.")
+                    elif "ignoreDuringBuilds: true" in content_nc:
+                         print(f"[{time.strftime('%H:%M:%S')}] eslint.ignoreDuringBuilds = true already set in {actual_next_config_filename}")
+                    else:
+                         print(f"[{time.strftime('%H:%M:%S')}] No changes made to {actual_next_config_filename} for ESLint (or 'ignoreDuringBuilds: true' already effectively set).")
+        except Exception as e_nc_update: results["error_messages"].append(f"Failed to update {actual_next_config_filename} for ESLint: {e_nc_update}")
+    else: print(f"WARNING: next.config.(mjs|js|ts) not found at {project_path}. Cannot ensure eslint.ignoreDuringBuilds.")
 
-            if log_output and process.stdout: print(f"[{time.strftime('%H:%M:%S')}] {command_name} STDOUT:\n{process.stdout}")
-            if log_output and process.stderr: print(f"[{time.strftime('%H:%M:%S')}] {command_name} STDERR:\n{process.stderr}")
+    # Update package.json
+    pkg_json_path = os.path.join(project_path, 'package.json')
+    if not os.path.exists(pkg_json_path): results["error_messages"].append(f"package.json not found at {pkg_json_path}"); return None
+    try:
+        with open(pkg_json_path, 'r+') as f:
+            pkg_data = json.load(f)
+            if 'dependencies' not in pkg_data: pkg_data['dependencies'] = {}
+            pkg_data['dependencies'].update(ADDITIONAL_DEPENDENCIES); pkg_data['dependencies']['react'] = "^18.2.0"; pkg_data['dependencies']['react-dom'] = "^18.2.0"
+            if 'devDependencies' not in pkg_data: pkg_data['devDependencies'] = {}
+            pkg_data['devDependencies'].update(ADDITIONAL_DEV_DEPENDENCIES); pkg_data['devDependencies']['@types/react'] = "^18.2.0"; pkg_data['devDependencies']['@types/react-dom'] = "^18.2.0"
+            if "tailwindcss-animate" not in pkg_data['devDependencies']: pkg_data['devDependencies']["tailwindcss-animate"] = "latest"
+            standard_scripts = {"dev": "next dev", "build": "next build", "start": "next start", "lint": "next lint"}
+            if 'scripts' not in pkg_data: pkg_data['scripts'] = {}
+            pkg_data['scripts'].update(standard_scripts)
+            f.seek(0); json.dump(pkg_data, f, indent=2); f.truncate()
+        print(f"[{time.strftime('%H:%M:%S')}] Updated package.json.")
+    except Exception as e: results["error_messages"].append(f"Failed to update package.json: {e}"); return None
+
+    # Run yarn install
+    print(f"[{time.strftime('%H:%M:%S')}] Running yarn install in {project_path}...")
+    install_process = _run_command_util(['yarn', 'install'], cwd=project_path, results_dict=results, timeout=600, command_name="yarn install (all)")
+    results["npm_install_success"] = bool(install_process and install_process.returncode == 0)
+    if not results["npm_install_success"]:
+        print(f"[{time.strftime('%H:%M:%S')}] Yarn install failed. Aborting setup for {project_folder_name}.")
+        return None
+
+    # Initialize shadcn/ui using `yes "" | ...` to handle interactive prompts
+    print(f"[{time.strftime('%H:%M:%S')}] Initializing shadcn/ui in {project_path} using shell for pipeline...")
+    shadcn_init_shell_cmd = 'yes "" | npx -y shadcn@latest init --yes' 
+    init_timeout = 400 
+    init_completed_successfully = False
+    try:
+        env = os.environ.copy()
+        init_process = subprocess.run(
+            shadcn_init_shell_cmd, cwd=project_path, shell=True, capture_output=True, 
+            text=True, encoding='utf-8', errors='replace', timeout=init_timeout, env=env
+        )
+        if "command_outputs" not in results: results["command_outputs"] = []
+        results["command_outputs"].append(("shadcn init (shell)", init_process.stdout, init_process.stderr))
+        if init_process.stdout and init_process.stdout.strip(): print(f"[{time.strftime('%H:%M:%S')}] shadcn init (shell) STDOUT:\n{init_process.stdout.strip()}")
+        if init_process.stderr and init_process.stderr.strip(): print(f"[{time.strftime('%H:%M:%S')}] shadcn init (shell) STDERR:\n{init_process.stderr.strip()}")
+        
+        if init_process.returncode == 0:
+            print(f"[{time.strftime('%H:%M:%S')}] shadcn init (shell) completed (Return Code: 0).")
+            init_completed_successfully = True
+        else:
+            raise subprocess.CalledProcessError(init_process.returncode, shadcn_init_shell_cmd, output=init_process.stdout, stderr=init_process.stderr)
+    except Exception as e_init:
+        results["error_messages"].append(f"Error during 'shadcn init (shell)': {str(e_init)}")
+        init_completed_successfully = False
+
+    if not init_completed_successfully or not os.path.exists(os.path.join(project_path, "components.json")):
+        results["error_messages"].append("shadcn init failed to create components.json or completed with errors.")
+        results["shadcn_add_success"] = False
+    else:
+        print(f"[{time.strftime('%H:%M:%S')}] components.json found after shadcn init.")
+        print(f"[{time.strftime('%H:%M:%S')}] Adding all shadcn/ui components in {project_path}...")
+        shadcn_add_cmd_list = ['npx', '-y', 'shadcn@latest', 'add', '--all', '--yes']
+        shadcn_timeout = 120 + (50 * 10) 
+        shadcn_add_process = _run_command_util(shadcn_add_cmd_list, cwd=project_path, results_dict=results, timeout=shadcn_timeout, command_name="shadcn add components")
+        
+        if not shadcn_add_process or shadcn_add_process.returncode != 0:
+            results["shadcn_add_success"] = False
+        else:
+            results["shadcn_add_success"] = True
+            shadcn_ui_dir = os.path.join(project_path, 'src', 'components', 'ui')
+            if not os.path.isdir(shadcn_ui_dir) or not os.listdir(shadcn_ui_dir):
+                results["error_messages"].append(f"Shadcn UI directory ({shadcn_ui_dir}) is missing or empty after 'add --all --yes'.")
+                results["shadcn_add_success"] = False
+    
+    # Crucial step: Overwrite tailwind.config.ts and globals.css with our definitive templates
+    # This happens AFTER shadcn init and add, to ensure our config takes precedence if shadcn's updates were incomplete or problematic.
+    #_create_file_with_content(os.path.join(project_path, 'tailwind.config.ts'), TAILWIND_CONFIG_TS_TEMPLATE, results, "tailwind.config.ts (FINAL OVERWRITE)")
+    #print(f"[{time.strftime('%H:%M:%S')}] Overwrote tailwind.config.ts with FINAL custom template.")
+    _create_file_with_content(os.path.join(project_path, 'src', 'app', 'globals.css'), APP_GLOBALS_CSS_TEMPLATE, results, "src/app/globals.css (FINAL OVERWRITE)")
+    print(f"[{time.strftime('%H:%M:%S')}] Overwrote globals.css with FINAL custom template.")
+
+    # Create/Overwrite other standard files
+    _create_file_with_content(os.path.join(project_path, 'src', 'app', 'layout.tsx'), APP_LAYOUT_TSX_TEMPLATE, results, "src/app/layout.tsx (custom)")
+    _create_file_with_content(os.path.join(project_path, 'src', 'app', 'page.tsx'), APP_PAGE_TSX_TEMPLATE, results, "src/app/page.tsx (custom)")
+    
+    # utils.ts: shadcn init should create this. If not, our template provides it.
+    utils_path = os.path.join(project_path, 'src', 'lib', 'utils.ts')
+    if not os.path.exists(utils_path):
+        os.makedirs(os.path.join(project_path, 'src', 'lib'), exist_ok=True)
+        _create_file_with_content(utils_path, LIB_UTILS_TS_TEMPLATE, results, "src/lib/utils.ts (fallback creation)")
+    else: # If shadcn created it, we might still want to ensure our version for consistency
+        _create_file_with_content(utils_path, LIB_UTILS_TS_TEMPLATE, results, "src/lib/utils.ts (ensuring custom version)")
+
+    
+    placeholder_dirs = [os.path.join(project_path, 'src', 'components'), os.path.join(project_path, 'src', 'hooks')]
+    for p_dir in placeholder_dirs: os.makedirs(p_dir, exist_ok=True)
+
+    placeholder_files = {
+        os.path.join(project_path, 'src', 'components', 'theme-provider.tsx'): COMPONENTS_THEME_PROVIDER_TEMPLATE,
+        os.path.join(project_path, 'src', 'components', 'Header.tsx'): HEADER_PLACEHOLDER_TEMPLATE,
+        os.path.join(project_path, 'src', 'components', 'Footer.tsx'): FOOTER_PLACEHOLDER_TEMPLATE,
+        os.path.join(project_path, 'src', 'components', 'mode-toggle.tsx'): MODE_TOGGLE_TEMPLATE,
+        os.path.join(project_path, 'src', 'hooks', 'use-key-press.ts'): USE_KEY_PRESS_TEMPLATE,
+    }
+    for path, template_content in placeholder_files.items():
+        _create_file_with_content(path, template_content, results, f"Placeholder: {os.path.relpath(path, project_path)}")
             
-            if check_on_error and process.returncode != 0:
-                raise subprocess.CalledProcessError(process.returncode, cmd_list, output=process.stdout, stderr=process.stderr)
-            print(f"[{time.strftime('%H:%M:%S')}] {command_name} completed (Return Code: {process.returncode}).")
-            return process
-        except subprocess.CalledProcessError as e:
-            error_msg = f"{command_name} failed with return code {e.returncode}."
-            print(f"[{time.strftime('%H:%M:%S')}] ERROR: {error_msg}")
-            results["error_messages"].append(f"{error_msg} (stdout/stderr in 'All Command Outputs')")
-            return None
-        except subprocess.TimeoutExpired as e:
-            error_msg = f"{command_name} timed out after {timeout} seconds."
-            print(f"[{time.strftime('%H:%M:%S')}] ERROR: {error_msg}")
-            partial_stdout = e.stdout.decode(encoding='utf-8', errors='replace') if isinstance(e.stdout, bytes) else e.stdout
-            partial_stderr = e.stderr.decode(encoding='utf-8', errors='replace') if isinstance(e.stderr, bytes) else e.stderr
-            found_cmd_log = False
-            for i, (cmd, _, _) in enumerate(results["command_outputs"]):
-                if cmd == command_name:
-                    results["command_outputs"][i] = (command_name, partial_stdout or "", partial_stderr or "")
-                    found_cmd_log = True
-                    break
-            if not found_cmd_log:
-                 results["command_outputs"].append((command_name, partial_stdout or "", partial_stderr or ""))
-            if log_output and partial_stdout: print(f"[{time.strftime('%H:%M:%S')}] {command_name} Partial STDOUT (Timeout):\n{partial_stdout}")
-            if log_output and partial_stderr: print(f"[{time.strftime('%H:%M:%S')}] {command_name} Partial STDERR (Timeout):\n{partial_stderr}")
-            results["error_messages"].append(f"{error_msg} (partial stdout/stderr in 'All Command Outputs')")
-            return None
-        except FileNotFoundError:
-            error_msg = f"'{cmd_list[0]}' command not found."
-            print(f"[{time.strftime('%H:%M:%S')}] ERROR: {error_msg}")
-            results["error_messages"].append(error_msg)
-            return None
-        except Exception as e:
-            error_msg = f"An unexpected error occurred during {command_name}: {str(e)}"
-            print(f"[{time.strftime('%H:%M:%S')}] ERROR: {error_msg}")
-            results["error_messages"].append(error_msg)
-            return None
+    return project_path
 
-    if os.path.exists(site_dir): shutil.rmtree(site_dir)
-    os.makedirs(site_dir, exist_ok=True)
 
-    create_nextjs_boilerplate(site_dir, results)
-    if results["error_messages"]: return results
+def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, site_identifier: str):
+    """Full process: create project, apply LLM code, build."""
+    results = {
+        "build_success": False, "npm_install_success": False, "cna_success": False,
+        "shadcn_add_success": False, "prettier_modified_files": 0, "llm_syntax_fixes_applied": 0,
+        "error_messages": [], "site_path": None, "command_outputs": []
+    }
 
+    safe_project_name = re.sub(r'[^a-zA-Z0-9_-]', '_', site_identifier)
+    if not safe_project_name: 
+        timestamp = str(int(time.time() * 1000))
+        safe_project_name = f"nextjs_app_{timestamp}"
+
+    project_final_path = setup_project_environment(base_tmp_dir, safe_project_name, results)
+
+    if not project_final_path:
+        print(f"[{time.strftime('%H:%M:%S')}] Project environment setup failed for {site_identifier}.")
+        return results
+    results["site_path"] = project_final_path
+
+    if not results.get("cna_success", False) or not results.get("npm_install_success", False):
+        print(f"[{time.strftime('%H:%M:%S')}] Critical: CNA or Yarn install failed. Aborting further steps for {site_identifier}.")
+        return results
+
+    # LLM code processing (syntax fixes, writing files)
     replacements = [
-        # General LLM import syntax fixes
         (r'import\s+\{\s*([\w,\s]+)\s*\}\s*=\s*(".*?");', r'import { \1 } from \2;'),
         (r'import\s+\*\s*as\s+(\w+)\s*=\s*(".*?");', r'import * as \1 from \2;'),
-        # Fix for unescaped apostrophes in JSX text (caution, may be too aggressive)
-        (r"(>)([^<]*?)'([^<]*?)(<)", r"\1\2'\3\4"), # Basic version
-        # Fix for old toast/useToast import
+        (r"(>)([^<]*?)'([^<]*?)(<)", r"\1\2'\3\4"),
         (r'import\s+\{\s*(?:useToast|toast)\s*(?:,\s*[^}]+)?\s*\}\s+from\s+["\']@/components/ui/use-toast["\'];?',
-         r'import { toast } from "sonner"; /* Patched by script */'),
+         r'import { toast } from "sonner"; /* Patched for sonner */'),
     ]
+    # ... (LLM replacements logic) ...
     for old_pattern, new_string in replacements:
         content_before_replace = tesslate_response_content
         tesslate_response_content = re.sub(old_pattern, new_string, tesslate_response_content, flags=re.DOTALL)
@@ -583,109 +642,126 @@ def process_generated_site(tesslate_response_content: str, site_dir: str):
     if results["llm_syntax_fixes_applied"] > 0:
         print(f"[{time.strftime('%H:%M:%S')}] Applied {results['llm_syntax_fixes_applied']} LLM syntax fixes.")
 
+
     edit_blocks = re.findall(r'<Edit filename="(.*?)">([\s\S]*?)<\/Edit>', tesslate_response_content)
     if not edit_blocks:
-        print(f"[{time.strftime('%H:%M:%S')}] No <Edit> blocks found in LLM response.")
+        print(f"[{time.strftime('%H:%M:%S')}] No <Edit> blocks in LLM response for {site_identifier}.")
     else:
-        print(f"[{time.strftime('%H:%M:%S')}] Found {len(edit_blocks)} <Edit> blocks. Writing AI-generated files...")
+        # ... (Writing LLM files logic) ...
+        print(f"[{time.strftime('%H:%M:%S')}] Found {len(edit_blocks)} <Edit> blocks for {site_identifier}. Writing AI-generated files...")
         for filename, code_content in edit_blocks:
             filename = filename.replace('\\"', '"').strip()
             code_content_unescaped = code_content.replace(r'\"', '"').replace(r"\'", "'").replace(r'\\', '\\')
-            _create_file_with_content(os.path.join(site_dir, filename), code_content_unescaped, results, f"AI-generated file: {filename}")
-            if any(f"Error creating/writing file AI-generated file: {filename}" in msg for msg in results["error_messages"]):
+            target_path = os.path.normpath(os.path.join(project_final_path, filename))
+            if not target_path.startswith(os.path.abspath(project_final_path)):
+                results["error_messages"].append(f"Security risk: LLM tried to write outside project dir: {filename} -> {target_path}")
+                continue
+            _create_file_with_content(target_path, code_content_unescaped, results, f"AI-generated file: {filename}")
+            if any(err_msg.startswith(f"Error creating/writing file AI-generated file: {filename}") for err_msg in results.get("error_messages", [])):
+                 print(f"[{time.strftime('%H:%M:%S')}] Critical error writing LLM file {filename}. Aborting for {site_identifier}.")
+                 results["build_success"] = False
                  return results
-
-    npm_install_cmd_list = ['npm', 'install']
-    # npm_install_cmd_list.append('--legacy-peer-deps') # Uncomment if issues with React 19
-    npm_install_process = _run_command(npm_install_cmd_list, site_dir, timeout=300, command_name="npm install")
-    if not npm_install_process:
-        results["npm_install_success"] = False
-        return results
-    results["npm_install_success"] = True
     
-    if SHADCN_COMPONENTS_TO_ADD:
-        shadcn_add_cmd = ['npx', 'shadcn@latest', 'add', '--all']# + SHADCN_COMPONENTS_TO_ADD
-        num_components = len(SHADCN_COMPONENTS_TO_ADD)
-        shadcn_timeout = 120 + (num_components * 45)
-        
-        shadcn_add_process = _run_command(shadcn_add_cmd, site_dir, timeout=shadcn_timeout, command_name="shadcn add components")
-        if not shadcn_add_process:
-            results["shadcn_add_success"] = False
-        else:
-            results["shadcn_add_success"] = True
-            print(f"[{time.strftime('%H:%M:%S')}] Verifying shadcn components installation...")
-            missing_shadcn_components = []
-            shadcn_ui_dir = os.path.join(site_dir, 'src', 'components', 'ui')
-            if not os.path.isdir(shadcn_ui_dir):
-                results["error_messages"].append(f"Shadcn UI directory missing after add: {shadcn_ui_dir}")
-                results["shadcn_add_success"] = False
+    if not results.get("shadcn_add_success", False): 
+        print(f"[{time.strftime('%H:%M:%S')}] Warning: shadcn components might be missing or incorrectly configured for {site_identifier}. Build will likely fail.")
+
+    # Optional: Code to remove unused 'cn' imports from LLM-generated files
+    if edit_blocks:
+        print(f"[{time.strftime('%H:%M:%S')}] Attempting to remove unused 'cn' imports from LLM files...")
+        for filename_rel_llm, _ in edit_blocks: 
+            filepath_abs_llm = os.path.join(project_final_path, filename_rel_llm)
+            if os.path.exists(filepath_abs_llm) and filepath_abs_llm.endswith((".tsx", ".jsx")):
+                try:
+                    with open(filepath_abs_llm, 'r+', encoding='utf-8') as f_llm:
+                        content_llm = f_llm.read()
+                        # Regex to find `import { cn } from "@/lib/utils";` or `import { cn, type ClassValue } from "@/lib/utils";`
+                        cn_import_pattern = r"import\s+\{\s*(?:type\s+)?cn(?:\s*,\s*type\s+ClassValue)?\s*\}\s+from\s+['\"]@/lib/utils['\"];?\s*\n?"
+                        # Simple check for `cn(` usage
+                        cn_usage_pattern = r"(?:cn\s*\(|className=\{cn\(|className=\{[^}]*cn\([^}]*\)\}|=\s*cn\()"
+                        
+                        if re.search(cn_import_pattern, content_llm) and not re.search(cn_usage_pattern, content_llm):
+                            new_content_llm = re.sub(cn_import_pattern, "", content_llm)
+                            if new_content_llm != content_llm:
+                                f_llm.seek(0)
+                                f_llm.write(new_content_llm)
+                                f_llm.truncate()
+                                print(f"INFO: Removed unused 'cn' import from LLM file: {filename_rel_llm}")
+                                results["llm_syntax_fixes_applied"] += 1 
+                except Exception as e_cn_fix_llm:
+                    print(f"WARN: Could not process LLM file {filename_rel_llm} for 'cn' fix: {e_cn_fix_llm}")
+
+    # Patch for sidebar.tsx if it exists (common shadcn component that might have this import issue)
+    sidebar_tsx_path = os.path.join(project_final_path, "src", "components", "ui", "sidebar.tsx")
+    if os.path.exists(sidebar_tsx_path):
+        print(f"[{time.strftime('%H:%M:%S')}] Checking/Patching sidebar.tsx for imports...")
+        try:
+            with open(sidebar_tsx_path, 'r+', encoding='utf-8') as f_sidebar:
+                content_sidebar = f_sidebar.read()
+                original_sidebar_content = content_sidebar 
+                modified_sidebar = False
+
+                # Patch for useIsMobile
+                wrong_import_pattern_use_mobile = r"(import\s+{[^}]*?\buseIsMobile\b[^}]*?}\s+from\s+)(?:['\"]@/components/hooks/use-mobile['\"]);?"
+                correct_import_use_mobile_text = r"\1'@/hooks/use-mobile';"
+                if re.search(wrong_import_pattern_use_mobile, content_sidebar):
+                    content_sidebar = re.sub(wrong_import_pattern_use_mobile, correct_import_use_mobile_text, content_sidebar)
+                    print(f"INFO: Patched 'useIsMobile' import in {sidebar_tsx_path}")
+                    results["llm_syntax_fixes_applied"] +=1 
+                    modified_sidebar = True
+                
+                # Patch for cn
+                wrong_import_pattern_cn = r"(import\s+{[^}]*?\bcn\b[^}]*?}\s+from\s+)(?:['\"]@/components/lib/utils['\"]);?"
+                correct_import_cn_text = r"\1'@/lib/utils';"
+                if re.search(wrong_import_pattern_cn, content_sidebar):
+                    content_sidebar = re.sub(wrong_import_pattern_cn, correct_import_cn_text, content_sidebar)
+                    print(f"INFO: Patched 'cn' import in {sidebar_tsx_path}")
+                    results["llm_syntax_fixes_applied"] +=1
+                    modified_sidebar = True
+                
+                if modified_sidebar:
+                    f_sidebar.seek(0)
+                    f_sidebar.write(content_sidebar)
+                    f_sidebar.truncate()
+                    print(f"INFO: sidebar.tsx was modified by patches.")
+                else:
+                    print(f"INFO: No import patches applied to sidebar.tsx (paths might already be correct or patterns didn't match).")
+        except Exception as e_sidebar_patch:
+            print(f"WARN: Could not patch sidebar.tsx: {e_sidebar_patch}")
+            results["error_messages"].append(f"Failed to patch sidebar.tsx: {e_sidebar_patch}")
+
+    # Attach final config files for debugging
+    tailwind_config_file = os.path.join(project_final_path, "tailwind.config.ts")
+    if os.path.exists(tailwind_config_file):
+        with open(tailwind_config_file, "r", encoding='utf-8') as f:
+            allure.attach(f.read(), name="tailwind.config.ts (final)", attachment_type=allure.attachment_type.TEXT)
     
-    if results["shadcn_add_success"]: 
-        toaster_path = os.path.join(site_dir, 'src', 'components', 'ui', 'toaster.tsx')
-        if os.path.exists(toaster_path):
-            try:
-                with open(toaster_path, 'r', encoding='utf-8') as f: content = f.read()
-                old_import_pattern = r'import\s+\{\s*useToast\s*\}\s+from\s+["\']@/components/hooks/use-toast["\'];?'
-                new_import = 'import { useToast } from "@/hooks/use-toast";'
-                if re.search(old_import_pattern, content):
-                    content = re.sub(old_import_pattern, new_import, content)
-                    with open(toaster_path, 'w', encoding='utf-8') as f: f.write(content)
-                    print(f"[{time.strftime('%H:%M:%S')}] Patched import in {toaster_path}")
-                    results["llm_syntax_fixes_applied"] += 1 
-            except Exception as e_patch:
-                results["error_messages"].append(f"Failed to patch {toaster_path}: {e_patch}")
-        
-        # Patch for EventForm.tsx, if it exists (specific to site_4)
-        event_form_path = os.path.join(site_dir, 'src', 'components', 'EventForm.tsx')
-        if os.path.exists(event_form_path):
-            try:
-                with open(event_form_path, 'r', encoding='utf-8') as f: content = f.read()
-                # Fix toast import to sonner if it's from the old path
-                old_toast_import_pattern = r'import\s+\{\s*toast\s*\}\s+from\s+["\']@/components/ui/use-toast["\'];?'
+    globals_css_file = os.path.join(project_final_path, "src", "app", "globals.css")
+    if os.path.exists(globals_css_file):
+        with open(globals_css_file, "r", encoding='utf-8') as f:
+            allure.attach(f.read(), name="globals.css (final)", attachment_type=allure.attachment_type.TEXT)
 
-                new_sonner_import = 'import { toast } from "sonner";'
-                if re.search(old_toast_import_pattern, content):
-                    content = re.sub(old_toast_import_pattern, new_sonner_import, content)
-                    with open(event_form_path, 'w', encoding='utf-8') as f: f.write(content)
-                    print(f"[{time.strftime('%H:%M:%S')}] Patched toast import in {event_form_path} to sonner.")
-                    results["llm_syntax_fixes_applied"] += 1
-            except Exception as e_patch_eventform:
-                 results["error_messages"].append(f"Failed to patch {event_form_path}: {e_patch_eventform}")
-
-
-    components_dir_path = os.path.join(site_dir, 'src', 'components')
-    if os.path.exists(components_dir_path):
-        print(f"[{time.strftime('%H:%M:%S')}] DEBUG: Files in {components_dir_path}: {os.listdir(components_dir_path)}")
-        # Ожидаемые компоненты могут меняться от сайта к сайту, этот список для общего случая или fallback
-        expected_components_debug = ["Header.tsx", "Footer.tsx", "theme-provider.tsx", "mode-toggle.tsx"]
-        for comp_to_check in expected_components_debug : 
-            comp_path = os.path.join(components_dir_path, comp_to_check)
-            print(f"[{time.strftime('%H:%M:%S')}] DEBUG: Check for {comp_path}: {'Exists' if os.path.exists(comp_path) else 'MISSING'}")
-        hook_path = os.path.join(site_dir, 'src', 'hooks', 'use-key-press.ts')
-        print(f"[{time.strftime('%H:%M:%S')}] DEBUG: Check for {hook_path}: {'Exists' if os.path.exists(hook_path) else 'MISSING'}")
-    else:
-        print(f"[{time.strftime('%H:%M:%S')}] DEBUG: Components directory {components_dir_path} does NOT exist.")
-
-
-    prettier_process = _run_command(['npx', 'prettier', '--write', '.', '--plugin', 'prettier-plugin-tailwindcss'], site_dir, timeout=120, command_name="prettier", check_on_error=False)
+    print(f"[{time.strftime('%H:%M:%S')}] Running prettier in {project_final_path}...")
+    prettier_cmd = ['yarn', 'prettier', '--write', '.', '--plugin', 'prettier-plugin-tailwindcss', '--ignore-unknown', '--no-error-on-unmatched-pattern']
+    prettier_process = _run_command_util(prettier_cmd, cwd=project_final_path, results_dict=results, timeout=180, command_name="prettier", check_on_error=False)
     if prettier_process:
         modified_files = 0
         combined_output = (prettier_process.stdout or "") + (prettier_process.stderr or "")
         for line in combined_output.splitlines():
-            if re.search(r"\.(tsx|ts|js|jsx|json|css|md)\s+\d+ms", line, re.IGNORECASE) and "(changed)" in line.lower():
-                modified_files += 1
-        summary_match = re.search(r"(\d+)\s+files?\s+changed", combined_output, re.IGNORECASE)
-        if summary_match: modified_files = int(summary_match.group(1))
+            if re.search(r"\S+\.(tsx|ts|js|jsx|json|css|mdx?)\s+\d+(\.\d+)?ms", line.strip(), re.IGNORECASE):
+                if "unchanged" not in line.lower() and not line.startswith("Done in"):
+                    modified_files += 1
         results["prettier_modified_files"] = modified_files
-        print(f"[{time.strftime('%H:%M:%S')}] Prettier modified {modified_files} files.")
-        if prettier_process.returncode != 0:
-            print(f"[{time.strftime('%H:%M:%S')}] Warning: Prettier exited with code {prettier_process.returncode}.")
+        print(f"[{time.strftime('%H:%M:%S')}] Prettier potentially modified {modified_files} files (heuristic for yarn).")
+        if prettier_process.returncode != 0 :
+             print(f"[{time.strftime('%H:%M:%S')}] Warning: Prettier (via yarn) exited with code {prettier_process.returncode}.")
 
-    build_process = _run_command(['npm', 'run', 'build'], site_dir, timeout=360, command_name="npm build")
-    if not build_process:
-        results["build_success"] = False
-        return results
-    results["build_success"] = True
+    print(f"[{time.strftime('%H:%M:%S')}] Running yarn build in {project_final_path}...")
+    build_process = _run_command_util(['yarn', 'build'], cwd=project_final_path, results_dict=results, timeout=400, command_name="yarn build")
     
-    print(f"[{time.strftime('%H:%M:%S')}] Site processing finished. Build success: {results['build_success']}")
+    if not build_process or build_process.returncode != 0:
+        results["build_success"] = False
+    else:
+        results["build_success"] = True
+
+    print(f"[{time.strftime('%H:%M:%S')}] Site processing finished for {site_identifier}. Build success: {results['build_success']}")
     return results
