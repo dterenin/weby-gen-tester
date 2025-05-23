@@ -208,37 +208,38 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
             output_media_dir = os.path.join(actual_site_directory, "test_output_media")
             os.makedirs(output_media_dir, exist_ok=True)
             server_url = "http://localhost:3000"
-            page = None # Initialize page to None for error handling
-            browser = None # Initialize browser to None
-            context = None # Initialize context to None
+            page = None 
+            browser = None 
+            context = None 
             try:
                 print(f"[{time.strftime('%H:%M:%S')}] Starting dev server for {site_identifier} in {actual_site_directory}...")
+                # Using "yarn dev" as per the original script's successful runs
                 dev_server_process = subprocess.Popen(
-                    ["yarn", "dev"], 
+                    ["yarn", "dev"],  # Changed from "npm run dev" to "yarn dev"
                     cwd=actual_site_directory, 
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE, 
                     text=True, 
                     bufsize=1, 
+                    # Removed CREATE_NO_WINDOW as it's Windows-specific and the original used 0
                     creationflags=0 
                 )
                 
                 wait_for_nextjs_server(server_url, timeout=180) # Increased timeout
                 
+                # Using headless=True as per original script, removed args=['--start-maximized'] for consistency
                 browser = playwright.chromium.launch(headless=True) 
                 context = browser.new_context(
                     viewport={'width': 1280, 'height': 720},
-                    record_video_dir=output_media_dir, # Re-enable video recording
+                    record_video_dir=output_media_dir, 
                     record_video_size={'width': 1280, 'height': 720}
                 )
                 page = context.new_page()
                 
                 print(f"Attempting to navigate to {server_url} for {site_identifier}")
                 
-                # --- Robust Event Handlers ---
                 def _on_console(msg):
                     try:
-                        # Ensure msg, msg.type, and msg.text() are safe to access
                         msg_type = getattr(msg, 'type', 'unknown_type') 
                         msg_text = msg.text() if hasattr(msg, 'text') and callable(msg.text) else str(msg) 
                         print(f"BROWSER CONSOLE ({site_identifier} {msg_type}): {msg_text}")
@@ -253,11 +254,23 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
 
                 page.on("console", _on_console)
                 page.on("pageerror", _on_page_error)
-                # --- End Robust Event Handlers ---
 
+                # Changed wait_until to "domcontentloaded" for faster initial load, then wait for hydration
                 page.goto(server_url, wait_until="domcontentloaded", timeout=90000) 
                 print(f"Page {server_url} loaded for {site_identifier}. Waiting for 5s for hydration/JS...")
-                page.wait_for_timeout(5000) 
+                page.wait_for_timeout(5000) # Original hydration wait
+
+                # --- JavaScript-based smooth scrolling ---
+                print(f"[{time.strftime('%H:%M:%S')}] Simulating smooth scroll down for {site_identifier} video...")
+                page.evaluate("window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })")
+                page.wait_for_timeout(3000) # Wait for scroll down to complete and be recorded
+
+                print(f"[{time.strftime('%H:%M:%S')}] Simulating smooth scroll up for {site_identifier} video...")
+                page.evaluate("window.scrollTo({ top: 0, behavior: 'smooth' })")
+                page.wait_for_timeout(3000) # Wait for scroll up to complete and be recorded
+                
+                print(f"[{time.strftime('%H:%M:%S')}] Scroll simulation finished for {site_identifier}.")
+                # --- End JavaScript-based smooth scrolling ---
                 
                 screenshot_filename = os.path.join(output_media_dir, f"{site_identifier}_debug_page.png")
                 page.screenshot(path=screenshot_filename, full_page=True)
@@ -266,28 +279,15 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
 
                 page_content_lower = page.content().lower()
 
-                # --- MODIFIED/IMPROVED ERROR CHECKING ---
                 critical_error_substrings = [
-                    "cannot resolve",       # For module resolution issues
-                    "module not found",     # For module resolution issues (re-enable this)
-                    "typeerror:",           # Common JavaScript error type
-                    "referenceerror:",      # Common JavaScript error type
-                    "syntaxerror:",         # Common JavaScript error type
-                    "unhandled runtime error", # Next.js specific
-                    "application error: a client-side exception has occurred", # Next.js specific
-                    "server error",         # Often displayed by frameworks for 500 errors
-                    "compilation failed",   # Next.js dev server error
-                    "failed to compile",    # Next.js dev server error
+                    "cannot resolve", "module not found", "typeerror:", "referenceerror:",
+                    "syntaxerror:", "unhandled runtime error", 
+                    "application error: a client-side exception has occurred",
+                    "server error", "compilation failed", "failed to compile",
                 ]
-
-                found_errors = []
-                for substring in critical_error_substrings:
-                    if substring in page_content_lower:
-                        found_errors.append(substring)
-                
+                found_errors = [s for s in critical_error_substrings if s in page_content_lower]
                 assert not found_errors, \
                     f"Found critical error indicators in page content for {site_identifier}: {', '.join(found_errors)}"
-                # --- END MODIFIED ERROR CHECKING ---
 
                 print(f"[{time.strftime('%H:%M:%S')}] Playwright UI check completed for {site_identifier}.")
 
@@ -303,8 +303,20 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                         print(f"Could not take error screenshot: {e_shot}")
                 pytest.fail(error_msg)
             finally:
-                if context: context.close() 
-                if browser: browser.close()
+                # Note: context.close() and browser.close() are now inside the finally block
+                # Video processing is also moved to ensure it runs after context/browser are closed
+                # if they were successfully opened.
+                if context: 
+                    try:
+                        context.close()
+                    except Exception as e_ctx:
+                        print(f"Error closing context for {site_identifier}: {e_ctx}")
+                if browser: 
+                    try:
+                        browser.close()
+                    except Exception as e_brw:
+                        print(f"Error closing browser for {site_identifier}: {e_brw}")
+                
                 if dev_server_process and dev_server_process.poll() is None:
                     print(f"[{time.strftime('%H:%M:%S')}] Terminating dev server for {site_identifier} (PID: {dev_server_process.pid})...")
                     dev_server_process.terminate()
@@ -315,15 +327,14 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                     except subprocess.TimeoutExpired:
                         print(f"[{time.strftime('%H:%M:%S')}] Dev server for {site_identifier} did not terminate gracefully, killing...")
                         dev_server_process.kill()
-                        stdout_k, stderr_k = dev_server_process.communicate() # Wait for kill to complete
+                        stdout_k, stderr_k = dev_server_process.communicate() 
                         if stdout_k: allure.attach(stdout_k, name=f"Server STDOUT (killed) ({site_identifier})", attachment_type=allure.attachment_type.TEXT)
                         if stderr_k: allure.attach(stderr_k, name=f"Server STDERR (killed) ({site_identifier})", attachment_type=allure.attachment_type.TEXT)
                     except Exception as e_cleanup:
                         allure.attach(str(e_cleanup), name=f"Server Cleanup Error ({site_identifier})", attachment_type=allure.attachment_type.TEXT)
                     print(f"[{time.strftime('%H:%M:%S')}] Dev server for {site_identifier} terminated.")
                 
-                # Video and GIF processing moved to outside the try/except/finally for browser operations
-                # Ensure this runs even if browser part fails, as long as actual_site_directory and output_media_dir are valid
+                # Video and GIF processing happens after browser/context are closed
                 if actual_site_directory and os.path.isdir(output_media_dir):
                     recorded_videos_list = glob.glob(os.path.join(output_media_dir, "*.webm"))
                     if recorded_videos_list:
@@ -332,11 +343,8 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                         gif_output_path = os.path.join(output_media_dir, f"{site_identifier}_animation.gif")
                         if convert_webm_to_gif(recorded_video_path, gif_output_path):
                             allure.attach.file(gif_output_path, name=f"{site_identifier}_animation_gif", attachment_type=allure.attachment_type.GIF)
-                        # Clean up the raw webm after processing or attempting to process
-                        # os.remove(recorded_video_path) # Optional: remove webm to save space
                     else:
                         print(f"Warning: No video file found for {site_identifier} in {output_media_dir}")
-
 
     elif not actual_site_directory:
         pytest.fail(f"Site directory for {site_identifier} was not created due to errors in project setup.")
