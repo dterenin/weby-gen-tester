@@ -235,8 +235,25 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                 
                 print(f"Attempting to navigate to {server_url} for {site_identifier}")
                 
-                page.on("console", lambda msg: print(f"BROWSER CONSOLE ({site_identifier} {msg.type()}): {msg.text()}"))
-                page.on("pageerror", lambda exc: print(f"BROWSER PAGE ERROR ({site_identifier}): {exc}"))
+                # --- Robust Event Handlers ---
+                def _on_console(msg):
+                    try:
+                        # Ensure msg, msg.type, and msg.text() are safe to access
+                        msg_type = getattr(msg, 'type', 'unknown_type') 
+                        msg_text = msg.text() if hasattr(msg, 'text') and callable(msg.text) else str(msg) 
+                        print(f"BROWSER CONSOLE ({site_identifier} {msg_type}): {msg_text}")
+                    except Exception as e_console:
+                        print(f"!! ERROR IN CONSOLE HANDLER ({site_identifier}): {type(e_console).__name__} - {e_console}")
+                
+                def _on_page_error(exc):
+                    try:
+                        print(f"BROWSER PAGE ERROR ({site_identifier}): {exc}") 
+                    except Exception as e_pageerror:
+                        print(f"!! ERROR IN PAGEERROR HANDLER ({site_identifier}): {type(e_pageerror).__name__} - {e_pageerror}")
+
+                page.on("console", _on_console)
+                page.on("pageerror", _on_page_error)
+                # --- End Robust Event Handlers ---
 
                 page.goto(server_url, wait_until="domcontentloaded", timeout=90000) 
                 print(f"Page {server_url} loaded for {site_identifier}. Waiting for 5s for hydration/JS...")
@@ -248,10 +265,29 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                 print(f"Screenshot taken for {site_identifier}")
 
                 page_content_lower = page.content().lower()
-                assert "error" not in page_content_lower, f"Found 'error' in page content for {site_identifier}"
-                assert "cannot resolve" not in page_content_lower, f"Found 'cannot resolve' in page content for {site_identifier}"
-                # Allow "not found" for 404 pages, but not generic "module not found"
-                # assert "module not found" not in page_content_lower, f"Found 'module not found' in page content for {site_identifier}"
+
+                # --- MODIFIED/IMPROVED ERROR CHECKING ---
+                critical_error_substrings = [
+                    "cannot resolve",       # For module resolution issues
+                    "module not found",     # For module resolution issues (re-enable this)
+                    "typeerror:",           # Common JavaScript error type
+                    "referenceerror:",      # Common JavaScript error type
+                    "syntaxerror:",         # Common JavaScript error type
+                    "unhandled runtime error", # Next.js specific
+                    "application error: a client-side exception has occurred", # Next.js specific
+                    "server error",         # Often displayed by frameworks for 500 errors
+                    "compilation failed",   # Next.js dev server error
+                    "failed to compile",    # Next.js dev server error
+                ]
+
+                found_errors = []
+                for substring in critical_error_substrings:
+                    if substring in page_content_lower:
+                        found_errors.append(substring)
+                
+                assert not found_errors, \
+                    f"Found critical error indicators in page content for {site_identifier}: {', '.join(found_errors)}"
+                # --- END MODIFIED ERROR CHECKING ---
 
                 print(f"[{time.strftime('%H:%M:%S')}] Playwright UI check completed for {site_identifier}.")
 

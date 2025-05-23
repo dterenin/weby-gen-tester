@@ -569,7 +569,7 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
     # This happens AFTER shadcn init and add, to ensure our config takes precedence if shadcn's updates were incomplete or problematic.
     #_create_file_with_content(os.path.join(project_path, 'tailwind.config.ts'), TAILWIND_CONFIG_TS_TEMPLATE, results, "tailwind.config.ts (FINAL OVERWRITE)")
     #print(f"[{time.strftime('%H:%M:%S')}] Overwrote tailwind.config.ts with FINAL custom template.")
-    _create_file_with_content(os.path.join(project_path, 'src', 'app', 'globals.css'), APP_GLOBALS_CSS_TEMPLATE, results, "src/app/globals.css (FINAL OVERWRITE)")
+    #_create_file_with_content(os.path.join(project_path, 'src', 'app', 'globals.css'), APP_GLOBALS_CSS_TEMPLATE, results, "src/app/globals.css (FINAL OVERWRITE)")
     print(f"[{time.strftime('%H:%M:%S')}] Overwrote globals.css with FINAL custom template.")
 
     # Create/Overwrite other standard files
