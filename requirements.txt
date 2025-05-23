@@ -2,3 +2,4 @@ pytest
 playwright
 requests
 allure-pytest
+pytest-assume
