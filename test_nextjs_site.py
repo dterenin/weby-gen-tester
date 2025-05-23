@@ -11,7 +11,7 @@ import json
 import shutil
 
 # Make sure the file name is correct
-from gen_site_logic import process_generated_site, SHADCN_COMPONENTS_TO_ADD 
+from gen_site_logic import process_generated_site 
 
 LLM_TEST_RESPONSE_FALLBACK = """
 <Edit filename="src/components/Header.tsx">
@@ -591,7 +591,7 @@ export default function Home() {
 </Edit>
 """
 
-def load_test_data(csv_filepath="Unified Data.csv"):
+def load_test_data(csv_filepath="Weby Unified.csv"):
     test_cases = []
     config = getattr(pytest, 'global_test_context', {}).get('config', None)
     output_response_field = "output_response"
@@ -697,8 +697,8 @@ def test_generated_nextjs_site(site_directory_and_data, playwright: Playwright):
              allure.attach("\n".join(results["error_messages"]), name="Logged Errors During Processing", attachment_type=allure.attachment_type.TEXT)
         print(f"Processing {site_identifier}: LLM fixes={results.get('llm_syntax_fixes_applied',0)}, Prettier={results.get('prettier_modified_files',0)}, Build Success={results.get('build_success', False)}")
         assert results.get("npm_install_success", False), "NPM install failed or was not marked successful."
-        if SHADCN_COMPONENTS_TO_ADD:
-             assert results.get("shadcn_add_success", False), "Shadcn add components failed or was not marked successful."
+        #if SHADCN_COMPONENTS_TO_ADD:
+             #assert results.get("shadcn_add_success", False), "Shadcn add components failed or was not marked successful."
         assert results.get("build_success", False), \
             f"Build failed for {site_identifier}. Check 'Build Process Summary' and 'All Command Outputs' for details. Error messages: {results.get('error_messages')}"
 

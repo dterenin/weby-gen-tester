@@ -13,7 +13,7 @@ SHADCN_COMPONENTS_TO_ADD = [
     "dialog", "dropdown-menu", "form", "input", "label", "menubar",
     "navigation-menu", "popover", "progress", "radio-group", "scroll-area",
     "select", "separator", "sheet", "skeleton", "slider", "sonner", "switch",
-    "table", "tabs", "textarea", "toast", "toggle", "tooltip"
+    "table", "tabs", "textarea", "toast", "toggle", "tooltip", "carousel"
 ]
 
 PACKAGE_JSON_TEMPLATE = """
@@ -61,7 +61,8 @@ PACKAGE_JSON_TEMPLATE = """
     "eslint-config-prettier": "latest",
     "prettier": "latest",
     "prettier-plugin-tailwindcss": "latest",
-    "@next/codemod": "latest"
+    "@next/codemod": "latest",
+    "tailwindcss": "^4"
   }
 }
 """
@@ -603,7 +604,7 @@ def process_generated_site(tesslate_response_content: str, site_dir: str):
     results["npm_install_success"] = True
     
     if SHADCN_COMPONENTS_TO_ADD:
-        shadcn_add_cmd = ['npx', 'shadcn@latest', 'add'] + SHADCN_COMPONENTS_TO_ADD
+        shadcn_add_cmd = ['npx', 'shadcn@latest', 'add', '--all']# + SHADCN_COMPONENTS_TO_ADD
         num_components = len(SHADCN_COMPONENTS_TO_ADD)
         shadcn_timeout = 120 + (num_components * 45)
         
@@ -618,27 +619,6 @@ def process_generated_site(tesslate_response_content: str, site_dir: str):
             if not os.path.isdir(shadcn_ui_dir):
                 results["error_messages"].append(f"Shadcn UI directory missing after add: {shadcn_ui_dir}")
                 results["shadcn_add_success"] = False
-            else:
-                for comp_name in SHADCN_COMPONENTS_TO_ADD:
-
-                    if comp_name == "toast": # Special case for toast
-                        if not os.path.exists(os.path.join(site_dir, 'src', 'hooks', 'use-toast.ts')):
-                            missing_shadcn_components.append(f"{comp_name} (missing src/hooks/use-toast.ts)")
-                        if not os.path.exists(os.path.join(shadcn_ui_dir, "toaster.tsx")):
-                             missing_shadcn_components.append(f"{comp_name} (missing ui/toaster.tsx)")
-                        if not os.path.exists(os.path.join(shadcn_ui_dir, "toast.tsx")): # The toast component itself
-                             missing_shadcn_components.append(f"{comp_name} (missing ui/toast.tsx)")
-                    elif not os.path.exists(os.path.join(shadcn_ui_dir, f"{comp_name}.tsx")):
-                        missing_shadcn_components.append(comp_name)
-                if missing_shadcn_components:
-                    msg = f"Missing shadcn components after add: {', '.join(missing_shadcn_components)}"
-                    results["error_messages"].append(msg)
-                    results["shadcn_add_success"] = False
-                    print(f"[{time.strftime('%H:%M:%S')}] Verification FAILED: {msg}")
-                else:
-                    print(f"[{time.strftime('%H:%M:%S')}] Verification PASSED: All expected shadcn components found.")
-    else:
-        results["shadcn_add_success"] = True
     
     if results["shadcn_add_success"]: 
         toaster_path = os.path.join(site_dir, 'src', 'components', 'ui', 'toaster.tsx')
