@@ -11,25 +11,25 @@ import allure # For attaching files to Allure reports
 ADDITIONAL_DEPENDENCIES = {
     "lucide-react": "latest",
     "framer-motion": "latest",
-    "class-variance-authority": "latest", 
-    "clsx": "latest", 
-    "tailwind-merge": "latest", 
+    "class-variance-authority": "latest",
+    "clsx": "latest",
+    "tailwind-merge": "latest",
     "react-intersection-observer": "latest",
-    "sonner": "latest", 
-    "date-fns": "latest", 
-    "@dnd-kit/core": "latest", 
+    "sonner": "latest",
+    "date-fns": "latest",
+    "@dnd-kit/core": "latest",
     "@dnd-kit/sortable": "latest",
     "@dnd-kit/modifiers": "latest",
-    "next-themes": "latest", 
-    "recharts": "latest", 
-    "react": "^18.2.0", 
-    "react-dom": "^18.2.0", 
-    "cmdk": "^1.0.0", 
-    "embla-carousel-react": "^8.0.0", 
-    "@radix-ui/react-slot": "^1.0.2", 
-    "zod": "^3.23.0", 
-    "@hookform/resolvers": "^3.0.0", 
-    "react-hook-form": "latest", 
+    "next-themes": "latest",
+    "recharts": "latest",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "cmdk": "^1.0.0",
+    "embla-carousel-react": "^8.0.0",
+    "@radix-ui/react-slot": "^1.0.2",
+    "zod": "^3.23.0",
+    "@hookform/resolvers": "^3.0.0",
+    "react-hook-form": "latest",
 }
 
 ADDITIONAL_DEV_DEPENDENCIES = {
@@ -37,142 +37,16 @@ ADDITIONAL_DEV_DEPENDENCIES = {
     "@types/react-dom": "^18.2.0",
     "prettier": "latest",
     "prettier-plugin-tailwindcss": "latest",
-    "tailwindcss-animate": "latest", 
+    "tailwindcss-animate": "latest",
 }
 
 # --- Templates for essential configuration and placeholder files ---
-
-# components.json is NOT created by us before shadcn init. shadcn init will create it.
-
-# This TAILWIND_CONFIG_TS_TEMPLATE is now primarily for reference, 
-# as we will rely on shadcn init/add to generate/update the actual tailwind.config.ts.
-# If issues persist, we might revert to overwriting with this, but only as a last resort.
-TAILWIND_CONFIG_TS_REFERENCE_TEMPLATE = """ 
-import type { Config } from 'tailwindcss'
-
-const config: Config = {
-  darkMode: ["class"],
-  content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
-  ],
-  prefix: "",
-  theme: {
-    container: {
-      center: true,
-      padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
-    },
-    extend: {
-      colors: { 
-        border: "hsl(var(--border))",
-        input: "hsl(var(--input))",
-        ring: "hsl(var(--ring))",
-        background: "hsl(var(--background))",
-        foreground: "hsl(var(--foreground))",
-        primary: {
-          DEFAULT: "hsl(var(--primary))",
-          foreground: "hsl(var(--primary-foreground))",
-        },
-        secondary: {
-          DEFAULT: "hsl(var(--secondary))",
-          foreground: "hsl(var(--secondary-foreground))",
-        },
-        destructive: {
-          DEFAULT: "hsl(var(--destructive))",
-          foreground: "hsl(var(--destructive-foreground))",
-        },
-        muted: {
-          DEFAULT: "hsl(var(--muted))",
-          foreground: "hsl(var(--muted-foreground))",
-        },
-        accent: {
-          DEFAULT: "hsl(var(--accent))",
-          foreground: "hsl(var(--accent-foreground))",
-        },
-        popover: {
-          DEFAULT: "hsl(var(--popover))",
-          foreground: "hsl(var(--popover-foreground))",
-        },
-        card: {
-          DEFAULT: "hsl(var(--card))",
-          foreground: "hsl(var(--card-foreground))",
-        },
-      },
-      borderRadius: { 
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
-      },
-      keyframes: {
-        "accordion-down": {
-          from: { height: "0" },
-          to: { height: "var(--radix-accordion-content-height)" },
-        },
-        "accordion-up": {
-          from: { height: "var(--radix-accordion-content-height)" },
-          to: { height: "0" },
-        },
-      },
-      animation: {
-        "accordion-down": "accordion-down 0.2s ease-out",
-        "accordion-up": "accordion-up 0.2s ease-out",
-      },
-    },
-  },
-  plugins: [require("tailwindcss-animate")],
-}
-export default config
-"""
-
-# This APP_GLOBALS_CSS_TEMPLATE is also for reference.
-# We will rely on shadcn init/add to correctly populate globals.css.
-# If that fails, we might need to overwrite with this.
-APP_GLOBALS_CSS_REFERENCE_TEMPLATE = """
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-@layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
-    /* ... all other css variables ... */
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-    --radius: 0.5rem;
-  }
- 
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    /* ... all other dark mode css variables ... */
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-  }
-}
- 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-    font-feature-settings: "rlig" 1, "calt" 1; 
-  }
-}
-"""
 
 APP_LAYOUT_TSX_TEMPLATE = """
 import './globals.css';
 import { Inter as FontSans } from 'next/font/google';
 import { cn } from '@/lib/utils';
-import { Toaster } from '@/components/ui/sonner'; 
+import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme-provider';
 
 const fontSans = FontSans({
@@ -252,7 +126,7 @@ MODE_TOGGLE_TEMPLATE = """
 import * as React from "react"
 import { Moon, Sun } from "lucide-react"
 import { useTheme } from "next-themes"
-import { Button } from "@/components/ui/button" 
+import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 export function ModeToggle() {
@@ -359,23 +233,23 @@ def _run_command_util(cmd_list_or_str, cwd, results_dict, timeout=120, check_on_
         process_input_bytes = std_input.encode() if std_input else None
 
         process = subprocess.run(
-            cmd_list_or_str, 
-            cwd=cwd, 
+            cmd_list_or_str,
+            cwd=cwd,
             shell=shell,
-            capture_output=True, 
-            text=(not process_input_bytes), 
+            capture_output=True,
+            text=(not process_input_bytes),
             input=process_input_bytes,
             encoding='utf-8' if not process_input_bytes else None,
             errors='replace' if not process_input_bytes else None,
-            check=False, 
-            timeout=timeout, 
+            check=False,
+            timeout=timeout,
             env=env
         )
         
         stdout_val = process.stdout
         stderr_val = process.stderr
 
-        if process_input_bytes: 
+        if process_input_bytes:
             stdout_val = stdout_val.decode(encoding='utf-8', errors='replace') if stdout_val else ""
             stderr_val = stderr_val.decode(encoding='utf-8', errors='replace') if stderr_val else ""
         
@@ -433,7 +307,7 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
 
     cna_flags = [
         project_folder_name, '--ts', '--tailwind', '--eslint', '--app', '--src-dir',
-        '--import-alias', '@/*', '--use-yarn', '--skip-git', 
+        '--import-alias', '@/*', '--use-yarn', '--skip-git',
         '--no-install', # We run yarn install after modifying package.json
         '--no-turbopack'
     ]
@@ -465,53 +339,128 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
             with open(actual_next_config_path, 'r+', encoding='utf-8') as f_nc:
                 content_nc = f_nc.read()
                 original_content_nc = str(content_nc)
-                
-                if not re.search(r"eslint\s*:\s*{\s*[^}]*?\bignoreDuringBuilds\s*:\s*true\b[^}]*}", content_nc, re.DOTALL):
-                    eslint_block_text = "eslint: {\n    ignoreDuringBuilds: true,\n  },"
-                    if "eslint:" in content_nc:
-                        content_nc, num_replacements_nc = re.subn(r"(\beslint\s*:\s*{)([^}]*?)(\bignoreDuringBuilds\s*:\s*)false([^}]*})", r"\1\2\3true\4", content_nc, flags=re.DOTALL)
-                        if num_replacements_nc == 0 and "ignoreDuringBuilds: true" not in content_nc:
-                             content_nc = re.sub(r"(\beslint\s*:\s*{)", r"\1\n    ignoreDuringBuilds: true,", content_nc, flags=re.DOTALL)
-                    else: 
-                        config_patterns_nc = [
-                            (r"(const\s+\w+\s*:\s*(?:import\([^)]+\)\.)?Config\s*=\s*{)", r"\1\n  {eslint_block}"),
-                            (r"(const\s+\w+\s*=\s*{)", r"\1\n  {eslint_block}"),
-                            (r"(export\s+default\s*{)", r"\1\n  {eslint_block}"),
-                            (r"(module\.exports\s*=\s*{)", r"\1\n  {eslint_block}")
-                        ]; added_eslint_block_nc = False
-                        for p_nc, rep_nc in config_patterns_nc:
-                            new_content_nc, n_s_nc = re.subn(p_nc, rep_nc.format(eslint_block=eslint_block_text), content_nc, 1)
-                            if n_s_nc > 0: content_nc = new_content_nc; added_eslint_block_nc = True; break
-                        if not added_eslint_block_nc: results["error_messages"].append(f"Could not reliably add eslint.ignoreDuringBuilds to {actual_next_config_filename}")
-                    
-                    if content_nc != original_content_nc:
-                        f_nc.seek(0); f_nc.write(content_nc); f_nc.truncate()
-                        if "ignoreDuringBuilds: true" in content_nc: print(f"[{time.strftime('%H:%M:%S')}] Ensured eslint.ignoreDuringBuilds = true in {actual_next_config_filename}")
-                        else: print(f"[{time.strftime('%H:%M:%S')}] Attempted to modify {actual_next_config_filename} for ESLint, but 'ignoreDuringBuilds: true' not confirmed present.")
-                    elif "ignoreDuringBuilds: true" in content_nc:
-                         print(f"[{time.strftime('%H:%M:%S')}] eslint.ignoreDuringBuilds = true already set in {actual_next_config_filename}")
+                modified_nc = False
+
+                # Regex to find `ignoreDuringBuilds: true` within an eslint block
+                # Handles various spacings and optional commas
+                ignore_builds_true_pattern = re.compile(
+                    r"eslint\s*:\s*{\s*[^}]*?\bignoreDuringBuilds\s*:\s*true\b"
+                )
+                # Regex to find `ignoreDuringBuilds: false`
+                ignore_builds_false_pattern = re.compile(
+                    r"(\beslint\s*:\s*{)([^}]*?)(\bignoreDuringBuilds\s*:\s*)false(\b)"
+                )
+                # Regex to find an existing eslint block
+                eslint_block_pattern = re.compile(r"\beslint\s*:\s*{")
+                # Regex to find the main config object (const nextConfig = { or module.exports = { etc.)
+                # This is a common pattern for Next.js configs
+                config_object_pattern = re.compile(
+                    r"((?:const|let|var)\s+\w+\s*(?::\s*\S+)?\s*=\s*{\s*|module\.exports\s*=\s*{\s*|export\s+default\s*(?:function\s*\w*\s*\(\s*\)\s*{[^}]*return\s*)?{\s*)"
+                )
+
+
+                if ignore_builds_true_pattern.search(content_nc):
+                    print(f"[{time.strftime('%H:%M:%S')}] eslint.ignoreDuringBuilds = true already set in {actual_next_config_filename}")
+                else:
+                    # Try to change `ignoreDuringBuilds: false` to `true`
+                    new_content_nc, num_replacements = ignore_builds_false_pattern.subn(r"\1\2\3true\4", content_nc)
+                    if num_replacements > 0:
+                        content_nc = new_content_nc
+                        modified_nc = True
+                        print(f"[{time.strftime('%H:%M:%S')}] Changed eslint.ignoreDuringBuilds from false to true in {actual_next_config_filename}")
+                    # If eslint block exists but no ignoreDuringBuilds, add it
+                    elif eslint_block_pattern.search(content_nc):
+                        content_nc = eslint_block_pattern.sub(r"\g<0>\n    ignoreDuringBuilds: true,", content_nc, 1)
+                        modified_nc = True
+                        print(f"[{time.strftime('%H:%M:%S')}] Added ignoreDuringBuilds: true to existing eslint block in {actual_next_config_filename}")
+                    # If no eslint block, try to add the whole block
                     else:
-                         print(f"[{time.strftime('%H:%M:%S')}] No changes made to {actual_next_config_filename} for ESLint (or 'ignoreDuringBuilds: true' already effectively set).")
-        except Exception as e_nc_update: results["error_messages"].append(f"Failed to update {actual_next_config_filename} for ESLint: {e_nc_update}")
-    else: print(f"WARNING: next.config.(mjs|js|ts) not found at {project_path}. Cannot ensure eslint.ignoreDuringBuilds.")
+                        match = config_object_pattern.search(content_nc)
+                        if match:
+                            insert_pos = match.end(1)
+                            eslint_config_text = "\n  eslint: {\n    ignoreDuringBuilds: true,\n  },"
+                            # Ensure it's inserted correctly, potentially before other properties if the opening brace is the last char on its line
+                            if content_nc[insert_pos-1] == '{' and content_nc[insert_pos] == '\n':
+                                 # If config object starts like `const config = {\n`
+                                content_nc = content_nc[:insert_pos] + eslint_config_text + content_nc[insert_pos:]
+                            else:
+                                # If config object starts like `const config = { property...`
+                                # Find the first property or closing brace to insert before
+                                first_property_match = re.search(r"\S", content_nc[insert_pos:])
+                                if first_property_match:
+                                    # Insert before the first property, ensuring comma if needed
+                                    actual_insert_pos = insert_pos + first_property_match.start()
+                                    # Check if a comma is needed before our eslint block
+                                    prev_char_index = actual_insert_pos -1
+                                    while prev_char_index > insert_pos and content_nc[prev_char_index].isspace():
+                                        prev_char_index -=1
+                                    
+                                    comma_needed = content_nc[prev_char_index] not in ['{', ','] and content_nc[prev_char_index].strip() != ""
+
+                                    eslint_config_text_with_comma = ("," if comma_needed else "") + eslint_config_text
+                                    content_nc = content_nc[:actual_insert_pos] + eslint_config_text_with_comma + content_nc[actual_insert_pos:]
+                                else: # Empty object, just insert
+                                     content_nc = content_nc[:insert_pos] + eslint_config_text.strip().rstrip(',') + "\n" + content_nc[insert_pos:]
+
+
+                            modified_nc = True
+                            print(f"[{time.strftime('%H:%M:%S')}] Added new eslint block with ignoreDuringBuilds: true to {actual_next_config_filename}")
+                        else:
+                            results["error_messages"].append(f"Could not reliably find main config object in {actual_next_config_filename} to add eslint block.")
+                            print(f"[{time.strftime('%H:%M:%S')}] WARNING: Could not find a suitable place to add eslint block in {actual_next_config_filename}.")
+                
+                if modified_nc:
+                    f_nc.seek(0)
+                    f_nc.write(content_nc)
+                    f_nc.truncate()
+                    # Verification step
+                    f_nc.seek(0)
+                    final_content_check = f_nc.read()
+                    if not ignore_builds_true_pattern.search(final_content_check):
+                        msg = f"Failed to verify eslint.ignoreDuringBuilds = true in {actual_next_config_filename} after modification."
+                        results["error_messages"].append(msg)
+                        print(f"[{time.strftime('%H:%M:%S')}] ERROR: {msg}")
+                    else:
+                        print(f"[{time.strftime('%H:%M:%S')}] Successfully verified eslint.ignoreDuringBuilds = true in {actual_next_config_filename} after modification.")
+
+        except Exception as e_nc_update:
+            msg = f"Failed to update {actual_next_config_filename} for ESLint: {e_nc_update}"
+            results["error_messages"].append(msg)
+            print(f"[{time.strftime('%H:%M:%S')}] ERROR: {msg}")
+    else:
+        print(f"WARNING: next.config.(mjs|js|ts) not found at {project_path}. Cannot ensure eslint.ignoreDuringBuilds.")
+
 
     # Update package.json
     pkg_json_path = os.path.join(project_path, 'package.json')
-    if not os.path.exists(pkg_json_path): results["error_messages"].append(f"package.json not found at {pkg_json_path}"); return None
+    if not os.path.exists(pkg_json_path):
+        results["error_messages"].append(f"package.json not found at {pkg_json_path}")
+        return None
     try:
         with open(pkg_json_path, 'r+') as f:
             pkg_data = json.load(f)
             if 'dependencies' not in pkg_data: pkg_data['dependencies'] = {}
-            pkg_data['dependencies'].update(ADDITIONAL_DEPENDENCIES); pkg_data['dependencies']['react'] = "^18.2.0"; pkg_data['dependencies']['react-dom'] = "^18.2.0"
+            pkg_data['dependencies'].update(ADDITIONAL_DEPENDENCIES)
+            pkg_data['dependencies']['react'] = "^18.2.0" # Enforce React 18
+            pkg_data['dependencies']['react-dom'] = "^18.2.0"
+
             if 'devDependencies' not in pkg_data: pkg_data['devDependencies'] = {}
-            pkg_data['devDependencies'].update(ADDITIONAL_DEV_DEPENDENCIES); pkg_data['devDependencies']['@types/react'] = "^18.2.0"; pkg_data['devDependencies']['@types/react-dom'] = "^18.2.0"
-            if "tailwindcss-animate" not in pkg_data['devDependencies']: pkg_data['devDependencies']["tailwindcss-animate"] = "latest"
+            pkg_data['devDependencies'].update(ADDITIONAL_DEV_DEPENDENCIES)
+            pkg_data['devDependencies']['@types/react'] = "^18.2.0" # Enforce React 18 types
+            pkg_data['devDependencies']['@types/react-dom'] = "^18.2.0"
+            if "tailwindcss-animate" not in pkg_data['devDependencies']: # Ensure this critical plugin is there
+                pkg_data['devDependencies']["tailwindcss-animate"] = "latest"
+
             standard_scripts = {"dev": "next dev", "build": "next build", "start": "next start", "lint": "next lint"}
             if 'scripts' not in pkg_data: pkg_data['scripts'] = {}
-            pkg_data['scripts'].update(standard_scripts)
-            f.seek(0); json.dump(pkg_data, f, indent=2); f.truncate()
+            pkg_data['scripts'].update(standard_scripts) # Ensure standard scripts are present/updated
+            f.seek(0)
+            json.dump(pkg_data, f, indent=2)
+            f.truncate()
         print(f"[{time.strftime('%H:%M:%S')}] Updated package.json.")
-    except Exception as e: results["error_messages"].append(f"Failed to update package.json: {e}"); return None
+    except Exception as e:
+        results["error_messages"].append(f"Failed to update package.json: {e}")
+        return None
 
     # Run yarn install
     print(f"[{time.strftime('%H:%M:%S')}] Running yarn install in {project_path}...")
@@ -523,13 +472,13 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
 
     # Initialize shadcn/ui using `yes "" | ...` to handle interactive prompts
     print(f"[{time.strftime('%H:%M:%S')}] Initializing shadcn/ui in {project_path} using shell for pipeline...")
-    shadcn_init_shell_cmd = 'yes "" | npx -y shadcn@latest init --yes' 
-    init_timeout = 400 
+    shadcn_init_shell_cmd = 'yes "" | npx -y shadcn@latest init --yes'
+    init_timeout = 400
     init_completed_successfully = False
     try:
         env = os.environ.copy()
         init_process = subprocess.run(
-            shadcn_init_shell_cmd, cwd=project_path, shell=True, capture_output=True, 
+            shadcn_init_shell_cmd, cwd=project_path, shell=True, capture_output=True,
             text=True, encoding='utf-8', errors='replace', timeout=init_timeout, env=env
         )
         if "command_outputs" not in results: results["command_outputs"] = []
@@ -548,12 +497,12 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
 
     if not init_completed_successfully or not os.path.exists(os.path.join(project_path, "components.json")):
         results["error_messages"].append("shadcn init failed to create components.json or completed with errors.")
-        results["shadcn_add_success"] = False
+        results["shadcn_add_success"] = False # Mark shadcn as failed if init is problematic
     else:
         print(f"[{time.strftime('%H:%M:%S')}] components.json found after shadcn init.")
         print(f"[{time.strftime('%H:%M:%S')}] Adding all shadcn/ui components in {project_path}...")
         shadcn_add_cmd_list = ['npx', '-y', 'shadcn@latest', 'add', '--all', '--yes']
-        shadcn_timeout = 120 + (50 * 10) 
+        shadcn_timeout = 120 + (50 * 10) # Generous timeout for adding all components
         shadcn_add_process = _run_command_util(shadcn_add_cmd_list, cwd=project_path, results_dict=results, timeout=shadcn_timeout, command_name="shadcn add components")
         
         if not shadcn_add_process or shadcn_add_process.returncode != 0:
@@ -565,24 +514,24 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
                 results["error_messages"].append(f"Shadcn UI directory ({shadcn_ui_dir}) is missing or empty after 'add --all --yes'.")
                 results["shadcn_add_success"] = False
     
-    # Crucial step: Overwrite tailwind.config.ts and globals.css with our definitive templates
-    # This happens AFTER shadcn init and add, to ensure our config takes precedence if shadcn's updates were incomplete or problematic.
-    #_create_file_with_content(os.path.join(project_path, 'tailwind.config.ts'), TAILWIND_CONFIG_TS_TEMPLATE, results, "tailwind.config.ts (FINAL OVERWRITE)")
-    #print(f"[{time.strftime('%H:%M:%S')}] Overwrote tailwind.config.ts with FINAL custom template.")
-    #_create_file_with_content(os.path.join(project_path, 'src', 'app', 'globals.css'), APP_GLOBALS_CSS_TEMPLATE, results, "src/app/globals.css (FINAL OVERWRITE)")
-    print(f"[{time.strftime('%H:%M:%S')}] Overwrote globals.css with FINAL custom template.")
+    # Overwrite globals.css AFTER shadcn init/add to ensure our base styles are applied
+    # Shadcn init/add should correctly populate tailwind.config.ts and globals.css with necessary variables.
+    # We only overwrite globals.css if we have a very specific template, otherwise let shadcn manage it.
+    # For now, assuming shadcn handles globals.css correctly. If issues arise, uncomment the overwrite.
+    # _create_file_with_content(os.path.join(project_path, 'src', 'app', 'globals.css'), APP_GLOBALS_CSS_REFERENCE_TEMPLATE, results, "src/app/globals.css (FINAL OVERWRITE)")
+    # print(f"[{time.strftime('%H:%M:%S')}] Ensured globals.css is set (potentially by shadcn or custom template).")
+
 
     # Create/Overwrite other standard files
     _create_file_with_content(os.path.join(project_path, 'src', 'app', 'layout.tsx'), APP_LAYOUT_TSX_TEMPLATE, results, "src/app/layout.tsx (custom)")
     _create_file_with_content(os.path.join(project_path, 'src', 'app', 'page.tsx'), APP_PAGE_TSX_TEMPLATE, results, "src/app/page.tsx (custom)")
     
-    # utils.ts: shadcn init should create this. If not, our template provides it.
     utils_path = os.path.join(project_path, 'src', 'lib', 'utils.ts')
-    if not os.path.exists(utils_path):
+    if not os.path.exists(utils_path): # shadcn init should create this
         os.makedirs(os.path.join(project_path, 'src', 'lib'), exist_ok=True)
         _create_file_with_content(utils_path, LIB_UTILS_TS_TEMPLATE, results, "src/lib/utils.ts (fallback creation)")
-    else: # If shadcn created it, we might still want to ensure our version for consistency
-        _create_file_with_content(utils_path, LIB_UTILS_TS_TEMPLATE, results, "src/lib/utils.ts (ensuring custom version)")
+    # else: # If shadcn created it, we generally trust its version.
+    #     _create_file_with_content(utils_path, LIB_UTILS_TS_TEMPLATE, results, "src/lib/utils.ts (ensuring custom version)")
 
     
     placeholder_dirs = [os.path.join(project_path, 'src', 'components'), os.path.join(project_path, 'src', 'hooks')]
@@ -610,7 +559,7 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
     }
 
     safe_project_name = re.sub(r'[^a-zA-Z0-9_-]', '_', site_identifier)
-    if not safe_project_name: 
+    if not safe_project_name:
         timestamp = str(int(time.time() * 1000))
         safe_project_name = f"nextjs_app_{timestamp}"
 
@@ -627,56 +576,62 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
 
     # LLM code processing (syntax fixes, writing files)
     replacements = [
-        (r'import\s+\{\s*([\w,\s]+)\s*\}\s*=\s*(".*?");', r'import { \1 } from \2;'),
-        (r'import\s+\*\s*as\s+(\w+)\s*=\s*(".*?");', r'import * as \1 from \2;'),
-        (r"(>)([^<]*?)'([^<]*?)(<)", r"\1\2'\3\4"),
+        (r'import\s+\{\s*([\w,\s]+)\s*\}\s*=\s*(".*?");', r'import { \1 } from \2;'), # Fix for import { X } = "package";
+        (r'import\s+\*\s*as\s+(\w+)\s*=\s*(".*?");', r'import * as \1 from \2;'), # Fix for import * as X = "package";
+        (r"(>)([^<]*?)'([^<]*?)(<)", r"\1\2'\3\4"), # Attempt to fix malformed string literals in JSX, e.g. >text'text<
+        # Patch useToast to sonner
         (r'import\s+\{\s*(?:useToast|toast)\s*(?:,\s*[^}]+)?\s*\}\s+from\s+["\']@/components/ui/use-toast["\'];?',
          r'import { toast } from "sonner"; /* Patched for sonner */'),
     ]
-    # ... (LLM replacements logic) ...
+    
+    original_llm_content_for_fixes = tesslate_response_content
     for old_pattern, new_string in replacements:
-        content_before_replace = tesslate_response_content
         tesslate_response_content = re.sub(old_pattern, new_string, tesslate_response_content, flags=re.DOTALL)
-        if content_before_replace != tesslate_response_content:
-            results["llm_syntax_fixes_applied"] += 1
+    
+    if original_llm_content_for_fixes != tesslate_response_content:
+        results["llm_syntax_fixes_applied"] += (original_llm_content_for_fixes != tesslate_response_content) # Count as 1 if any change
+    
     if results["llm_syntax_fixes_applied"] > 0:
-        print(f"[{time.strftime('%H:%M:%S')}] Applied {results['llm_syntax_fixes_applied']} LLM syntax fixes.")
+        print(f"[{time.strftime('%H:%M:%S')}] Applied LLM syntax fixes.")
 
 
     edit_blocks = re.findall(r'<Edit filename="(.*?)">([\s\S]*?)<\/Edit>', tesslate_response_content)
     if not edit_blocks:
         print(f"[{time.strftime('%H:%M:%S')}] No <Edit> blocks in LLM response for {site_identifier}.")
     else:
-        # ... (Writing LLM files logic) ...
         print(f"[{time.strftime('%H:%M:%S')}] Found {len(edit_blocks)} <Edit> blocks for {site_identifier}. Writing AI-generated files...")
         for filename, code_content in edit_blocks:
-            filename = filename.replace('\\"', '"').strip()
-            code_content_unescaped = code_content.replace(r'\"', '"').replace(r"\'", "'").replace(r'\\', '\\')
+            filename = filename.replace('\\"', '"').strip() # Unescape quotes in filename
+            # Basic unescaping for common HTML entities that might appear in code blocks
+            code_content_unescaped = code_content.replace(r'<', '<').replace(r'>', '>').replace(r'&', '&')
+            code_content_unescaped = code_content_unescaped.replace(r'\"', '"').replace(r"\'", "'").replace(r'\\', '\\')
+            
             target_path = os.path.normpath(os.path.join(project_final_path, filename))
+            # Security check: ensure target_path is within project_final_path
             if not target_path.startswith(os.path.abspath(project_final_path)):
                 results["error_messages"].append(f"Security risk: LLM tried to write outside project dir: {filename} -> {target_path}")
                 continue
             _create_file_with_content(target_path, code_content_unescaped, results, f"AI-generated file: {filename}")
+            # Check if writing this specific file failed
             if any(err_msg.startswith(f"Error creating/writing file AI-generated file: {filename}") for err_msg in results.get("error_messages", [])):
                  print(f"[{time.strftime('%H:%M:%S')}] Critical error writing LLM file {filename}. Aborting for {site_identifier}.")
-                 results["build_success"] = False
-                 return results
+                 results["build_success"] = False # Mark build as failed
+                 return results # Stop processing for this site
     
-    if not results.get("shadcn_add_success", False): 
+    if not results.get("shadcn_add_success", False):
         print(f"[{time.strftime('%H:%M:%S')}] Warning: shadcn components might be missing or incorrectly configured for {site_identifier}. Build will likely fail.")
 
     # Optional: Code to remove unused 'cn' imports from LLM-generated files
     if edit_blocks:
         print(f"[{time.strftime('%H:%M:%S')}] Attempting to remove unused 'cn' imports from LLM files...")
-        for filename_rel_llm, _ in edit_blocks: 
+        cn_fixes_this_run = 0
+        for filename_rel_llm, _ in edit_blocks:
             filepath_abs_llm = os.path.join(project_final_path, filename_rel_llm)
             if os.path.exists(filepath_abs_llm) and filepath_abs_llm.endswith((".tsx", ".jsx")):
                 try:
                     with open(filepath_abs_llm, 'r+', encoding='utf-8') as f_llm:
                         content_llm = f_llm.read()
-                        # Regex to find `import { cn } from "@/lib/utils";` or `import { cn, type ClassValue } from "@/lib/utils";`
                         cn_import_pattern = r"import\s+\{\s*(?:type\s+)?cn(?:\s*,\s*type\s+ClassValue)?\s*\}\s+from\s+['\"]@/lib/utils['\"];?\s*\n?"
-                        # Simple check for `cn(` usage
                         cn_usage_pattern = r"(?:cn\s*\(|className=\{cn\(|className=\{[^}]*cn\([^}]*\)\}|=\s*cn\()"
                         
                         if re.search(cn_import_pattern, content_llm) and not re.search(cn_usage_pattern, content_llm):
@@ -686,30 +641,30 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
                                 f_llm.write(new_content_llm)
                                 f_llm.truncate()
                                 print(f"INFO: Removed unused 'cn' import from LLM file: {filename_rel_llm}")
-                                results["llm_syntax_fixes_applied"] += 1 
+                                cn_fixes_this_run += 1
                 except Exception as e_cn_fix_llm:
                     print(f"WARN: Could not process LLM file {filename_rel_llm} for 'cn' fix: {e_cn_fix_llm}")
+        if cn_fixes_this_run > 0:
+            results["llm_syntax_fixes_applied"] += cn_fixes_this_run
 
-    # Patch for sidebar.tsx if it exists (common shadcn component that might have this import issue)
+
+    # Patch for sidebar.tsx if it exists
     sidebar_tsx_path = os.path.join(project_final_path, "src", "components", "ui", "sidebar.tsx")
     if os.path.exists(sidebar_tsx_path):
         print(f"[{time.strftime('%H:%M:%S')}] Checking/Patching sidebar.tsx for imports...")
         try:
             with open(sidebar_tsx_path, 'r+', encoding='utf-8') as f_sidebar:
                 content_sidebar = f_sidebar.read()
-                original_sidebar_content = content_sidebar 
                 modified_sidebar = False
 
-                # Patch for useIsMobile
                 wrong_import_pattern_use_mobile = r"(import\s+{[^}]*?\buseIsMobile\b[^}]*?}\s+from\s+)(?:['\"]@/components/hooks/use-mobile['\"]);?"
                 correct_import_use_mobile_text = r"\1'@/hooks/use-mobile';"
                 if re.search(wrong_import_pattern_use_mobile, content_sidebar):
                     content_sidebar = re.sub(wrong_import_pattern_use_mobile, correct_import_use_mobile_text, content_sidebar)
                     print(f"INFO: Patched 'useIsMobile' import in {sidebar_tsx_path}")
-                    results["llm_syntax_fixes_applied"] +=1 
+                    results["llm_syntax_fixes_applied"] +=1
                     modified_sidebar = True
                 
-                # Patch for cn
                 wrong_import_pattern_cn = r"(import\s+{[^}]*?\bcn\b[^}]*?}\s+from\s+)(?:['\"]@/components/lib/utils['\"]);?"
                 correct_import_cn_text = r"\1'@/lib/utils';"
                 if re.search(wrong_import_pattern_cn, content_sidebar):
@@ -730,7 +685,7 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
             results["error_messages"].append(f"Failed to patch sidebar.tsx: {e_sidebar_patch}")
 
     # Attach final config files for debugging
-    tailwind_config_file = os.path.join(project_final_path, "tailwind.config.ts")
+    tailwind_config_file = os.path.join(project_final_path, "tailwind.config.ts") # Assuming .ts from shadcn
     if os.path.exists(tailwind_config_file):
         with open(tailwind_config_file, "r", encoding='utf-8') as f:
             allure.attach(f.read(), name="tailwind.config.ts (final)", attachment_type=allure.attachment_type.TEXT)
@@ -742,11 +697,13 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
 
     print(f"[{time.strftime('%H:%M:%S')}] Running prettier in {project_final_path}...")
     prettier_cmd = ['yarn', 'prettier', '--write', '.', '--plugin', 'prettier-plugin-tailwindcss', '--ignore-unknown', '--no-error-on-unmatched-pattern']
-    prettier_process = _run_command_util(prettier_cmd, cwd=project_final_path, results_dict=results, timeout=180, command_name="prettier", check_on_error=False)
+    prettier_process = _run_command_util(prettier_cmd, cwd=project_final_path, results_dict=results, timeout=180, command_name="prettier", check_on_error=False) # Prettier failure shouldn't stop build
     if prettier_process:
         modified_files = 0
+        # Heuristic to count modified files from prettier output (yarn specific)
         combined_output = (prettier_process.stdout or "") + (prettier_process.stderr or "")
         for line in combined_output.splitlines():
+            # Matches lines like: src/app/page.tsx 10ms (NOT "unchanged")
             if re.search(r"\S+\.(tsx|ts|js|jsx|json|css|mdx?)\s+\d+(\.\d+)?ms", line.strip(), re.IGNORECASE):
                 if "unchanged" not in line.lower() and not line.startswith("Done in"):
                     modified_files += 1
@@ -755,11 +712,23 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
         if prettier_process.returncode != 0 :
              print(f"[{time.strftime('%H:%M:%S')}] Warning: Prettier (via yarn) exited with code {prettier_process.returncode}.")
 
+
     print(f"[{time.strftime('%H:%M:%S')}] Running yarn build in {project_final_path}...")
-    build_process = _run_command_util(['yarn', 'build'], cwd=project_final_path, results_dict=results, timeout=400, command_name="yarn build")
+    build_process = _run_command_util(['yarn', 'build'], cwd=project_final_path, results_dict=results, timeout=400, command_name="yarn build") # Build failure is critical
     
     if not build_process or build_process.returncode != 0:
         results["build_success"] = False
+        # If build failed, try to get more specific error from stderr
+        if build_process and build_process.stderr:
+            build_error_lines = build_process.stderr.strip().splitlines()
+            if build_error_lines:
+                 # Try to find a more specific error message
+                specific_error = next((line for line in build_error_lines if "error" in line.lower() or "failed" in line.lower()), None)
+                if specific_error:
+                    results["error_messages"].append(f"Yarn build failed: {specific_error}")
+                else: # Fallback to a generic message if no specific error line found
+                    results["error_messages"].append(f"Yarn build failed with return code {build_process.returncode}. (See 'All Command Outputs')")
+
     else:
         results["build_success"] = True
 
