@@ -302,7 +302,7 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
         '--no-install', '--no-turbopack'
     ]
     cna_cmd_list = ['npx', '-y', 'create-next-app@latest'] + cna_flags
-    cna_success = _run_command_util(cna_cmd_list, cwd=base_tmp_dir, results_dict=results, timeout=60, command_name=stage_name_cna)
+    cna_success = _run_command_util(cna_cmd_list, cwd=base_tmp_dir, results_dict=results, timeout=120, command_name=stage_name_cna)
     results["cna_success"] = cna_success
     if not cna_success: return None
     

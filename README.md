@@ -59,6 +59,7 @@ To run the tests and generate the Allure report:
     pytest -s --alluredir=allure-results
     ```
     -   `-s`: To display `print()` statements (progress logs).
+    -   `-n auto`: Specifies the pytest parallelism workers.
     -   `--alluredir=allure-results`: Specifies the directory where Allure test results (raw data) will be stored.
 
 2.  **View Allure Report:**

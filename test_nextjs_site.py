@@ -10,6 +10,9 @@ import csv
 import allure
 import json
 from pytest_assume.plugin import assume
+import socket
+import contextlib
+asyncio_default_fixture_loop_scope = session 
 
 from gen_site_logic import process_generated_site
 
@@ -31,12 +34,19 @@ export default function HomePage() {
 </Edit>
 """
 
-def load_test_data(csv_filepath="Weby Unified.csv"):
+
+def get_free_port() -> int:
+    """Get a free port for the next test."""
+    with contextlib.closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
+        s.bind(('', 0))
+        return s.getsockname()[1]
+
+def load_test_data(csv_filepath="RawData_cleaned.csv"):
     """Loads test data from a CSV file or uses fallback data."""
     test_cases = []
     config = getattr(pytest, 'global_test_context', {}).get('config', None)
     
-    output_response_field = "output_response"
+    output_response_field = "output_enhanced_r"
     framework_field = "metadata_framework"
     input_question_field = "input_question"
 
@@ -223,14 +233,16 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
         dev_server_process = None
         output_media_dir = os.path.join(actual_site_directory, "test_output_media")
         os.makedirs(output_media_dir, exist_ok=True)
-        server_url = "http://localhost:3000"
+        port = get_free_port()
+        server_url = f"http://localhost:{port}"
         page = None; browser = None; context = None # Initialize to None
         context_closed_for_media = False # Flag to track if context was closed for media
 
         try:
             with allure.step("Start Dev Server & Navigate"):
                 dev_server_process = subprocess.Popen(
-                    ["yarn", "dev"], cwd=actual_site_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                   ["yarn", "dev", "-p", str(port)], cwd=actual_site_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                    env={**os.environ, "PORT": str(port)},
                     text=True, bufsize=1, creationflags=0
                 )
                 wait_for_nextjs_server(server_url, timeout=180)

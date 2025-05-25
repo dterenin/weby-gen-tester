@@ -4,3 +4,4 @@ __pycache__
 .pytest_cache
 .DS_Store
 table_reporter.py
+dataset_cleaner.py
