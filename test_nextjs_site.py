@@ -12,7 +12,6 @@ import json
 from pytest_assume.plugin import assume
 import socket
 import contextlib
-asyncio_default_fixture_loop_scope = session 
 
 from gen_site_logic import process_generated_site
 
@@ -46,7 +45,7 @@ def load_test_data(csv_filepath="RawData_cleaned.csv"):
     test_cases = []
     config = getattr(pytest, 'global_test_context', {}).get('config', None)
     
-    output_response_field = "output_enhanced_r"
+    output_response_field = "output_response"
     framework_field = "metadata_framework"
     input_question_field = "input_question"
 
@@ -162,13 +161,13 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
         "Create Next App (CNA)": "cna_success",
         "Configure Next.js (ESLint)": "next_config_success",
         "Update package.json": "pkg_json_success",
-        "Yarn Install": "yarn_install_success",
+        "pnpm Install": "pnpm_install_success",
         "Shadcn Init": "shadcn_init_success",
         "Shadcn Add Components": "shadcn_add_success",
         "Apply LLM Code": "llm_files_write_success",
         "ESLint Fix": "eslint_fix_ran_successfully", 
         "Prettier Format": "prettier_ran_successfully", 
-        "Yarn Build": "build_success"
+        "pnpm Build": "build_success"
     }
     
     soft_assert_failures = []
@@ -221,7 +220,7 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
         print(f"WARNING: Soft assertions failed for {site_identifier}: {soft_assert_failures}")
 
     if not results.get("build_success"):
-        build_fail_stderr = results.get("command_outputs_map", {}).get("Yarn Build", {}).get("stderr", "")
+        build_fail_stderr = results.get("command_outputs_map", {}).get("pnpm Build", {}).get("stderr", "")
         error_summary = get_error_summary_from_stderr(build_fail_stderr) if build_fail_stderr else "No specific STDERR from build."
         pytest.fail(f"Overall build_success is False for {site_identifier}. Skipping UI tests. {error_summary}")
 
@@ -241,7 +240,7 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
         try:
             with allure.step("Start Dev Server & Navigate"):
                 dev_server_process = subprocess.Popen(
-                   ["yarn", "dev", "-p", str(port)], cwd=actual_site_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
+                   ["pnpm", "dev", "-p", str(port)], cwd=actual_site_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
                     env={**os.environ, "PORT": str(port)},
                     text=True, bufsize=1, creationflags=0
                 )

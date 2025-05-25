@@ -201,7 +201,7 @@ def _create_file_with_content(filepath: str, content: str, results_dict: dict, f
         if "error_messages" not in results_dict: results_dict["error_messages"] = []
         results_dict["error_messages"].append(error_msg)
 
-def _run_command_util(cmd_list_or_str, cwd, results_dict, timeout=60, check_on_error=True, command_name="Command", log_output_to_console=False, shell=False, std_input=None):
+def _run_command_util(cmd_list_or_str, cwd, results_dict, timeout=120, check_on_error=True, command_name="Command", log_output_to_console=False, shell=False, std_input=None):
     """
     Utility to run a shell command and capture its output.
     Outputs are stored in results_dict["command_outputs_map"][command_name].
@@ -297,12 +297,12 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
     stage_name_cna = "Create Next App (CNA)"
     results["project_setup_stages"].append(stage_name_cna)
     cna_flags = [
-        project_folder_name, '--ts', '--tailwind', '--eslint', '--app', '--src-dir',
-        '--import-alias', '@/*', '--use-yarn', '--skip-git',
-        '--no-install', '--no-turbopack'
+    project_folder_name, '--ts', '--tailwind', '--eslint', '--app', '--src-dir',
+    '--import-alias', '@/*', '--package-manager', 'pnpm', '--skip-git',
+    '--no-install', '--no-turbopack'
     ]
-    cna_cmd_list = ['npx', '-y', 'create-next-app@latest'] + cna_flags
-    cna_success = _run_command_util(cna_cmd_list, cwd=base_tmp_dir, results_dict=results, timeout=120, command_name=stage_name_cna)
+    cna_cmd_list = ['pnpm', 'dlx', 'create-next-app@latest'] + cna_flags
+    cna_success = _run_command_util(cna_cmd_list, cwd=base_tmp_dir, results_dict=results, timeout=180, command_name=stage_name_cna)
     results["cna_success"] = cna_success
     if not cna_success: return None
     
@@ -374,19 +374,19 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
     if not pkg_json_success: return None
 
 
-    # Stage: Yarn Install
-    stage_name_yarn_install = "Yarn Install"
-    results["project_setup_stages"].append(stage_name_yarn_install)
-    install_success = _run_command_util(['yarn', 'install'], cwd=project_path, results_dict=results, timeout=60, command_name=stage_name_yarn_install)
+    # Stage: pnpm Install
+    stage_name_pnpm_install = "pnpm Install"
+    results["project_setup_stages"].append(stage_name_pnpm_install)
+    install_success = _run_command_util(['pnpm', 'install'], cwd=project_path, results_dict=results, timeout=120, command_name=stage_name_pnpm_install)
     results["npm_install_success"] = install_success # Keep old key for compatibility if test script uses it
-    results["yarn_install_success"] = install_success
+    results["pnpm_install_success"] = install_success
     if not install_success: return None
 
     # Stage: Shadcn Init
     stage_name_shadcn_init = "Shadcn Init"
     results["project_setup_stages"].append(stage_name_shadcn_init)
-    shadcn_init_shell_cmd = 'yes "" | npx -y shadcn@latest init --yes'
-    init_success = _run_command_util(shadcn_init_shell_cmd, cwd=project_path, results_dict=results, timeout=60, command_name=stage_name_shadcn_init, shell=True, check_on_error=True)
+    shadcn_init_shell_cmd = 'yes "" | pnpm dlx shadcn@latest init --yes'
+    init_success = _run_command_util(shadcn_init_shell_cmd, cwd=project_path, results_dict=results, timeout=120, command_name=stage_name_shadcn_init, shell=True, check_on_error=True)
     results["shadcn_init_success"] = init_success and os.path.exists(os.path.join(project_path, "components.json"))
     if not results["shadcn_init_success"]:
         if not os.path.exists(os.path.join(project_path, "components.json")):
@@ -399,8 +399,8 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
     stage_name_shadcn_add = "Shadcn Add Components"
     results["project_setup_stages"].append(stage_name_shadcn_add)
     if results.get("shadcn_init_success"): # Only run add if init was somewhat successful (components.json exists)
-        shadcn_add_cmd_list = ['npx', '-y', 'shadcn@latest', 'add', '--all', '--yes']
-        add_success = _run_command_util(shadcn_add_cmd_list, cwd=project_path, results_dict=results, timeout=60, command_name=stage_name_shadcn_add)
+        shadcn_add_cmd_list = ['pnpm', 'dlx', 'shadcn@latest', 'add', '--all', '--yes']
+        add_success = _run_command_util(shadcn_add_cmd_list, cwd=project_path, results_dict=results, timeout=120, command_name=stage_name_shadcn_add)
         results["shadcn_add_success"] = add_success
         if add_success:
             shadcn_ui_dir = os.path.join(project_path, 'src', 'components', 'ui')
@@ -444,7 +444,7 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
         "project_setup_stages": [], # Will be populated by setup_project_environment
         # Individual success flags for major operations
         "cna_success": False, "next_config_success": False, "pkg_json_success": False,
-        "yarn_install_success": False, "shadcn_init_success": False, "shadcn_add_success": False,
+        "pnpm_install_success": False, "shadcn_init_success": False, "shadcn_add_success": False,
         "llm_files_write_success": True, # Assume true unless a file write fails
         "eslint_fix_success": False, "prettier_success": False, "build_success": False,
         # Counts
@@ -456,10 +456,10 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
     project_final_path = setup_project_environment(base_tmp_dir, safe_project_name, results)
     results["site_path"] = project_final_path
 
-    if not project_final_path or not results.get("yarn_install_success"): # If dir not created or yarn install failed
+    if not project_final_path or not results.get("pnpm_install_success"): # If dir not created or pnpm install failed
         print(f"[{time.strftime('%H:%M:%S')}] Critical project setup failure for {site_identifier}. Aborting.")
         # Ensure all setup stage flags reflect failure if we abort early
-        for stage_key in ["cna_success", "next_config_success", "pkg_json_success", "yarn_install_success", "shadcn_init_success", "shadcn_add_success"]:
+        for stage_key in ["cna_success", "next_config_success", "pkg_json_success", "pnpm_install_success", "shadcn_init_success", "shadcn_add_success"]:
             if stage_key not in results: results[stage_key] = False
         return results
 
@@ -501,8 +501,8 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
     # --- ESLint --fix step ---
     stage_name_eslint_fix = "ESLint Fix"
     results["project_setup_stages"].append(stage_name_eslint_fix)
-    eslint_fix_cmd = ['yarn', 'eslint', '.', '--fix']
-    eslint_fix_success = _run_command_util(eslint_fix_cmd, cwd=project_final_path, results_dict=results, timeout=60, command_name=stage_name_eslint_fix, check_on_error=False)
+    eslint_fix_cmd = ['pnpm', 'eslint', '.', '--fix']
+    eslint_fix_success = _run_command_util(eslint_fix_cmd, cwd=project_final_path, results_dict=results, timeout=120, command_name=stage_name_eslint_fix, check_on_error=False)
     results["eslint_fix_success"] = eslint_fix_success # True if command ran, even if it exited > 0 (meaning issues remain)
     if not eslint_fix_success and results["command_outputs_map"].get(stage_name_eslint_fix, {}).get("returncode", -1) !=0 :
          print(f"[{time.strftime('%H:%M:%S')}] Warning: ESLint --fix command itself failed or had issues for {site_identifier}.")
@@ -511,8 +511,8 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
     # --- Prettier step ---
     stage_name_prettier = "Prettier Format"
     results["project_setup_stages"].append(stage_name_prettier)
-    prettier_cmd = ['yarn', 'prettier', '--write', '.', '--plugin', 'prettier-plugin-tailwindcss', '--ignore-unknown', '--no-error-on-unmatched-pattern']
-    prettier_success_run = _run_command_util(prettier_cmd, cwd=project_final_path, results_dict=results, timeout=60, command_name=stage_name_prettier, check_on_error=False)
+    prettier_cmd = ['pnpm', 'prettier', '--write', '.', '--plugin', 'prettier-plugin-tailwindcss', '--ignore-unknown', '--no-error-on-unmatched-pattern']
+    prettier_success_run = _run_command_util(prettier_cmd, cwd=project_final_path, results_dict=results, timeout=120, command_name=stage_name_prettier, check_on_error=False)
     results["prettier_success"] = prettier_success_run # True if command ran
     if prettier_success_run:
         prettier_output = results["command_outputs_map"].get(stage_name_prettier, {})
@@ -525,9 +525,9 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
         results["prettier_modified_files"] = modified_files
 
     # --- Build step ---
-    stage_name_build = "Yarn Build"
+    stage_name_build = "pnpm Build"
     results["project_setup_stages"].append(stage_name_build)
-    build_success = _run_command_util(['yarn', 'build'], cwd=project_final_path, results_dict=results, timeout=60, command_name=stage_name_build)
+    build_success = _run_command_util(['pnpm', 'build'], cwd=project_final_path, results_dict=results, timeout=120, command_name=stage_name_build)
     results["build_success"] = build_success
 
     print(f"[{time.strftime('%H:%M:%S')}] Site processing finished for {site_identifier}. Overall Build Success: {results['build_success']}")
