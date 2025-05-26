@@ -165,6 +165,7 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
         "Shadcn Init": "shadcn_init_success",
         "Shadcn Add Components": "shadcn_add_success",
         "Apply LLM Code": "llm_files_write_success",
+        "Auto Import Fix": "auto_fix_success",
         "pnpm Install (extra)": "pnpm_install_extra_success_optional",
         "ESLint Fix": "eslint_fix_success_optional", 
         "Prettier Format": "prettier_success_optional", 
