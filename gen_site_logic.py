@@ -10,19 +10,87 @@ import allure # Keep for potential direct attachments if ever needed, though pri
 # --- Start of gen_site_logic.py ---
 
 # Dependencies to add or ensure specific versions for, on top of what create-next-app installs.
-ADDITIONAL_DEPENDENCIES = {
-    "lucide-react": "latest", "framer-motion": "latest", "class-variance-authority": "latest",
-    "clsx": "latest", "tailwind-merge": "latest", "react-intersection-observer": "latest",
-    "sonner": "latest", "date-fns": "latest", "@dnd-kit/core": "latest",
-    "@dnd-kit/sortable": "latest", "@dnd-kit/modifiers": "latest", "next-themes": "latest",
-    "recharts": "latest", "react": "^18.2.0", "react-dom": "^18.2.0", "cmdk": "^1.0.0",
-    "embla-carousel-react": "^8.0.0", "@radix-ui/react-slot": "^1.0.2", "zod": "^3.23.0",
-    "@hookform/resolvers": "^3.0.0", "react-hook-form": "latest",
+ADDITIONAL_DEPENDENCIES: dict[str, str] = {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/modifiers": "^9.0.0",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "@hello-pangea/dnd": "^18.0.1",
+    "@hookform/resolvers": "^5.0.1",
+    "@radix-ui/react-accordion": "^1.2.4",
+    "@radix-ui/react-alert-dialog": "^1.1.7",
+    "@radix-ui/react-aspect-ratio": "^1.1.3",
+    "@radix-ui/react-avatar": "^1.1.4",
+    "@radix-ui/react-checkbox": "^1.1.5",
+    "@radix-ui/react-collapsible": "^1.1.4",
+    "@radix-ui/react-context-menu": "^2.2.7",
+    "@radix-ui/react-dialog": "^1.1.7",
+    "@radix-ui/react-dropdown-menu": "^2.1.7",
+    "@radix-ui/react-hover-card": "^1.1.7",
+    "@radix-ui/react-label": "^2.1.3",
+    "@radix-ui/react-menubar": "^1.1.7",
+    "@radix-ui/react-navigation-menu": "^1.2.6",
+    "@radix-ui/react-popover": "^1.1.7",
+    "@radix-ui/react-progress": "^1.1.3",
+    "@radix-ui/react-radio-group": "^1.2.4",
+    "@radix-ui/react-scroll-area": "^1.2.4",
+    "@radix-ui/react-select": "^2.1.7",
+    "@radix-ui/react-separator": "^1.1.3",
+    "@radix-ui/react-slider": "^1.2.4",
+    "@radix-ui/react-slot": "^1.2.0",
+    "@radix-ui/react-switch": "^1.1.4",
+    "@radix-ui/react-tabs": "^1.1.4",
+    "@radix-ui/react-toast": "^1.2.10",
+    "@radix-ui/react-toggle": "^1.1.3",
+    "@radix-ui/react-toggle-group": "^1.1.3",
+    "@radix-ui/react-tooltip": "^1.2.0",
+    "body-parser": "^2.2.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "cmdk": "^1.1.1",
+    "date-fns": "^3.6.0",
+    "embla-carousel-react": "^8.6.0",
+    "express": "^5.1.0",
+    "input-otp": "^1.4.2",
+    "lucide-react": "^0.488.0",
+    "motion": "^12.6.5",
+    "next": "15.3.0",
+    "next-themes": "^0.4.6",
+    "puppeteer": "^24.8.2",
+    "react": "^19.0.0",
+    "react-day-picker": "^8.10.1",
+    "react-dnd": "^16.0.1",
+    "react-dnd-html5-backend": "^16.0.1",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.55.0",
+    "react-resizable-panels": "^2.1.7",
+    "recharts": "^2.15.2",
+    "sonner": "^2.0.3",
+    "tailwind-merge": "^3.2.0",
+    "three": "^0.176.0",
+    "tw-animate-css": "^1.2.5",
+    "vaul": "^1.1.2",
+    "zod": "^3.24.2"
 }
 
-ADDITIONAL_DEV_DEPENDENCIES = {
-    "@types/react": "^18.2.0", "@types/react-dom": "^18.2.0", "prettier": "latest",
-    "prettier-plugin-tailwindcss": "latest", "tailwindcss-animate": "latest",
+
+ADDITIONAL_DEV_DEPENDENCIES: dict[str, str] = {
+    "@babel/eslint-parser": "^7.27.0",
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9.25.1",
+    "eslint-config-next": "15.3.0",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "tailwindcss": "^4",
+    "typescript": "^5",
+    "prettier": "latest",
+    "prettier-plugin-tailwindcss": "latest",
+    "tailwindcss-animate": "latest"
 }
 
 # --- Templates for essential configuration and placeholder files ---
@@ -373,11 +441,10 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
     results["pkg_json_success"] = pkg_json_success
     if not pkg_json_success: return None
 
-
     # Stage: pnpm Install
     stage_name_pnpm_install = "pnpm Install"
     results["project_setup_stages"].append(stage_name_pnpm_install)
-    install_success = _run_command_util(['pnpm', 'install'], cwd=project_path, results_dict=results, timeout=120, command_name=stage_name_pnpm_install)
+    install_success = _run_command_util(['pnpm', 'install', '--strict-peer-dependencies'], cwd=project_path, results_dict=results, timeout=180, command_name=stage_name_pnpm_install)
     results["npm_install_success"] = install_success # Keep old key for compatibility if test script uses it
     results["pnpm_install_success"] = install_success
     if not install_success: return None
@@ -434,6 +501,15 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
             
     return project_path
 
+def extract_external_packages(code: str) -> set[str]:
+    pkgs = set()
+    for m in re.finditer(r'from\s+["\']([^"\']+)["\']', code):
+        spec = m.group(1)
+        if spec.startswith((".", "/")) or spec.startswith("@/"):
+            continue
+        root = "/".join(spec.split("/")[:2]) if spec.startswith("@") else spec.split("/")[0]
+        pkgs.add(root)
+    return pkgs
 
 def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, site_identifier: str):
     """Full process: create project, apply LLM code, build."""
@@ -497,6 +573,37 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
     if not results["llm_files_write_success"]:
         print(f"[{time.strftime('%H:%M:%S')}] Error writing one or more LLM files for {site_identifier}. Aborting build process.")
         return results # Stop if LLM files couldn't be written
+
+    # Add
+    external_pkgs = set()
+    for _, code in edit_blocks:
+        external_pkgs |= extract_external_packages(code)
+
+    if external_pkgs:
+        pkg_json_path = os.path.join(project_final_path, "package.json")
+        newly_added = False
+        with open(pkg_json_path, "r+") as f:
+            pkg = json.load(f)
+            deps = pkg.setdefault("dependencies", {})
+            for pkg_name in external_pkgs:
+                if pkg_name not in deps:
+                    deps[pkg_name] = "latest"
+                    newly_added = True
+            if newly_added:
+                f.seek(0); json.dump(pkg, f, indent=2); f.truncate()
+
+        if newly_added:
+          stage_name_extra = "pnpm Install (extra)"
+          results["project_setup_stages"].append(stage_name_extra)
+
+          extra_ok = _run_command_util(
+              ['pnpm', 'install', '--strict-peer-dependencies'],
+              cwd=project_final_path,
+              results_dict=results,
+              timeout=120,
+              command_name=stage_name_extra
+          )
+          results["pnpm_install_extra_success"] = extra_ok
 
     # --- ESLint --fix step ---
     stage_name_eslint_fix = "ESLint Fix"

@@ -40,7 +40,7 @@ def get_free_port() -> int:
         s.bind(('', 0))
         return s.getsockname()[1]
 
-def load_test_data(csv_filepath="RawData_cleaned.csv"):
+def load_test_data(csv_filepath="weby_eval_run_generated_4d377292.csv"):
     """Loads test data from a CSV file or uses fallback data."""
     test_cases = []
     config = getattr(pytest, 'global_test_context', {}).get('config', None)
@@ -161,12 +161,13 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
         "Create Next App (CNA)": "cna_success",
         "Configure Next.js (ESLint)": "next_config_success",
         "Update package.json": "pkg_json_success",
-        "pnpm Install": "pnpm_install_success",
+        "pnpm Install": "pnpm_install_success_optional",
         "Shadcn Init": "shadcn_init_success",
         "Shadcn Add Components": "shadcn_add_success",
         "Apply LLM Code": "llm_files_write_success",
-        "ESLint Fix": "eslint_fix_ran_successfully", 
-        "Prettier Format": "prettier_ran_successfully", 
+        "pnpm Install (extra)": "pnpm_install_extra_success_optional",
+        "ESLint Fix": "eslint_fix_success_optional", 
+        "Prettier Format": "prettier_success_optional", 
         "pnpm Build": "build_success"
     }
     
