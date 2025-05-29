@@ -1,4 +1,4 @@
-# Use a base image that includes Node.js and Python
+# Use Node.js 20 with Debian Bullseye slim as base image
 FROM node:20-bullseye-slim
 
 # Install Python and its dependencies (needed for playwright, pytest, requests)
@@ -37,18 +37,14 @@ RUN pip3 install --no-cache-dir -r requirements.txt
 # This will install Chromium, Firefox, and WebKit within the container
 RUN playwright install --with-deps chromium firefox webkit
 
-# Ensure npm cache is clean and global packages are not installed globally
-ENV NPM_CONFIG_PREFIX=/usr/local/.npm-global
-ENV PATH=$PATH:$NPM_CONFIG_PREFIX/bin
-
-# Set up a non-root user for security best practices
-ARG UID=1000
-ARG GID=1000
-RUN groupadd -g $GID appuser && useradd -u $UID -g $GID -m appuser
-USER appuser
-
 # Copy all project files
-COPY --chown=appuser:appuser . .
+COPY . .
+
+# Make sure node and pnpm are in PATH for all users
+ENV PATH=/usr/local/bin:$PATH
+
+# Expose port for Flask app
+EXPOSE 5000
 
 # Command to keep the container running for debugging if needed, or just exit
 CMD ["python3", "main.py"]

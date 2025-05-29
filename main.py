@@ -21,30 +21,41 @@ def signal_handler(sig, frame):
 
 def check_dependencies():
     """Check if required dependencies are available"""
+    deps_status = {}
+    
     try:
         # Check Node.js
         node_result = subprocess.run(['node', '--version'], capture_output=True, text=True)
         if node_result.returncode == 0:
-            print(f"✓ Node.js: {node_result.stdout.strip()}")
+            deps_status['node'] = f"✓ Node.js: {node_result.stdout.strip()}"
         else:
-            print("✗ Node.js not found")
-            return False
+            deps_status['node'] = "✗ Node.js not found"
             
         # Check pnpm
         pnpm_result = subprocess.run(['pnpm', '--version'], capture_output=True, text=True)
         if pnpm_result.returncode == 0:
-            print(f"✓ pnpm: {pnpm_result.stdout.strip()}")
+            deps_status['pnpm'] = f"✓ pnpm: {pnpm_result.stdout.strip()}"
         else:
-            print("✗ pnpm not found")
-            return False
+            deps_status['pnpm'] = "✗ pnpm not found"
             
         # Check Python
-        print(f"✓ Python: {sys.version.split()[0]}")
+        deps_status['python'] = f"✓ Python: {sys.version.split()[0]}"
         
-        return True
+        # Check PATH
+        deps_status['path'] = f"PATH: {os.environ.get('PATH', 'Not found')}"
+        
+        # Check which node
+        which_result = subprocess.run(['which', 'node'], capture_output=True, text=True)
+        if which_result.returncode == 0:
+            deps_status['node_path'] = f"Node path: {which_result.stdout.strip()}"
+        else:
+            deps_status['node_path'] = "Node path: not found"
+            
+        return deps_status
+        
     except Exception as e:
-        print(f"Error checking dependencies: {e}")
-        return False
+        deps_status['error'] = f"Error checking dependencies: {e}"
+        return deps_status
 
 def run_tests_async(test_command):
     """Run tests in background thread"""
@@ -77,7 +88,7 @@ def run_tests_async(test_command):
     finally:
         test_running = False
 
-# HTML template for the web interface
+# Simple HTML template for debugging
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
@@ -90,44 +101,28 @@ HTML_TEMPLATE = """
         .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
         .button { background: #2563eb; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
         .button:hover { background: #1d4ed8; }
-        .button:disabled { background: #9ca3af; cursor: not-allowed; }
         .output { background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
-        .status { padding: 10px; border-radius: 5px; margin: 10px 0; }
-        .status.running { background: #fef3c7; color: #92400e; }
-        .status.success { background: #d1fae5; color: #065f46; }
-        .status.error { background: #fee2e2; color: #991b1b; }
-        .input-group { margin: 10px 0; }
-        .input-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .input-group input { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .deps { background: #f3f4f6; padding: 10px; border-radius: 5px; font-family: monospace; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🧪 NextJS Web Tester - Debug Interface</h1>
-            <p>Simple web interface for running and debugging tests</p>
+            <p>Debug interface for dependency checking and test execution</p>
         </div>
         
         <div class="section">
-            <h2>Quick Test Commands</h2>
-            <button class="button" onclick="runTest('pytest test_nextjs_site.py -v')">Run Basic Tests</button>
-            <button class="button" onclick="runTest('pytest test_nextjs_site.py -v -s')">Run Tests (Verbose)</button>
-            <button class="button" onclick="runTest('pytest test_nextjs_site.py --alluredir=allure-results')">Run with Allure</button>
-            <button class="button" onclick="checkStatus()">Check Status</button>
+            <h2>System Dependencies</h2>
+            <div id="dependencies" class="deps">Loading...</div>
+            <button class="button" onclick="checkDeps()">Refresh Dependencies</button>
         </div>
         
         <div class="section">
-            <h2>Custom Command</h2>
-            <div class="input-group">
-                <label for="customCommand">Enter custom pytest command:</label>
-                <input type="text" id="customCommand" placeholder="pytest test_nextjs_site.py --your-options" value="pytest test_nextjs_site.py -v">
-                <button class="button" onclick="runCustomTest()">Run Custom Command</button>
-            </div>
-        </div>
-        
-        <div class="section">
-            <h2>Test Status</h2>
-            <div id="status" class="status">Ready to run tests</div>
+            <h2>Test Commands</h2>
+            <button class="button" onclick="runTest('python3 --version')">Check Python</button>
+            <button class="button" onclick="runTest('pytest --version')">Check Pytest</button>
+            <button class="button" onclick="runTest('pytest test_nextjs_site.py -v --tb=short')">Run Tests</button>
         </div>
         
         <div class="section">
@@ -137,7 +132,17 @@ HTML_TEMPLATE = """
     </div>
     
     <script>
-        let statusCheckInterval;
+        function checkDeps() {
+            fetch('/dependencies')
+            .then(response => response.json())
+            .then(data => {
+                let html = '';
+                for (const [key, value] of Object.entries(data)) {
+                    html += key + ': ' + value + '\n';
+                }
+                document.getElementById('dependencies').textContent = html;
+            });
+        }
         
         function runTest(command) {
             fetch('/run-test', {
@@ -148,74 +153,26 @@ HTML_TEMPLATE = """
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    document.getElementById('status').innerHTML = 'Tests started...';
-                    document.getElementById('status').className = 'status running';
-                    startStatusCheck();
-                } else {
-                    document.getElementById('status').innerHTML = 'Error: ' + data.message;
-                    document.getElementById('status').className = 'status error';
+                    setTimeout(checkStatus, 1000);
                 }
-            })
-            .catch(error => {
-                document.getElementById('status').innerHTML = 'Network error: ' + error;
-                document.getElementById('status').className = 'status error';
             });
-        }
-        
-        function runCustomTest() {
-            const command = document.getElementById('customCommand').value;
-            if (command.trim()) {
-                runTest(command);
-            }
         }
         
         function checkStatus() {
             fetch('/status')
             .then(response => response.json())
             .then(data => {
-                const statusDiv = document.getElementById('status');
-                const outputDiv = document.getElementById('output');
-                
-                if (data.running) {
-                    statusDiv.innerHTML = 'Tests are running...';
-                    statusDiv.className = 'status running';
-                } else {
-                    if (data.results && data.results.returncode !== undefined) {
-                        if (data.results.returncode === 0) {
-                            statusDiv.innerHTML = 'Tests completed successfully!';
-                            statusDiv.className = 'status success';
-                        } else {
-                            statusDiv.innerHTML = 'Tests failed (exit code: ' + data.results.returncode + ')';
-                            statusDiv.className = 'status error';
-                        }
-                    } else {
-                        statusDiv.innerHTML = 'Ready to run tests';
-                        statusDiv.className = 'status';
-                    }
-                }
-                
                 if (data.output) {
-                    outputDiv.textContent = data.output;
-                    outputDiv.scrollTop = outputDiv.scrollHeight;
+                    document.getElementById('output').textContent = data.output;
                 }
-                
-                if (!data.running && statusCheckInterval) {
-                    clearInterval(statusCheckInterval);
-                    statusCheckInterval = null;
+                if (data.running) {
+                    setTimeout(checkStatus, 2000);
                 }
-            })
-            .catch(error => {
-                console.error('Status check error:', error);
             });
         }
         
-        function startStatusCheck() {
-            if (statusCheckInterval) clearInterval(statusCheckInterval);
-            statusCheckInterval = setInterval(checkStatus, 2000);
-        }
-        
-        // Check status on page load
-        checkStatus();
+        // Load dependencies on page load
+        checkDeps();
     </script>
 </body>
 </html>
@@ -225,6 +182,10 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/dependencies')
+def dependencies():
+    return jsonify(check_dependencies())
+
 @app.route('/run-test', methods=['POST'])
 def run_test():
     global test_running
@@ -233,14 +194,14 @@ def run_test():
         return jsonify({'success': False, 'message': 'Tests are already running'})
     
     data = request.get_json()
-    command = data.get('command', 'pytest test_nextjs_site.py -v')
+    command = data.get('command', 'python3 --version')
     
     # Start tests in background thread
     thread = threading.Thread(target=run_tests_async, args=(command,))
     thread.daemon = True
     thread.start()
     
-    return jsonify({'success': True, 'message': 'Tests started'})
+    return jsonify({'success': True, 'message': 'Command started'})
 
 @app.route('/status')
 def status():
@@ -261,18 +222,15 @@ if __name__ == "__main__":
     
     print("NextJS Web Tester is starting...")
     
-    if check_dependencies():
-        print("\n✓ All dependencies are available!")
-        print("\n🌐 Starting web interface...")
-        print("\n📍 Access the debug interface at: http://localhost:5000")
-        print("\n🔧 Available endpoints:")
-        print("  • / - Main debug interface")
-        print("  • /status - Test status API")
-        print("  • /health - Health check")
-        print("\n🚀 Ready for testing!")
-        
-        # Start Flask app
-        app.run(host='0.0.0.0', port=5000, debug=False)
-    else:
-        print("\n✗ Missing dependencies. Please install Node.js and pnpm.")
-        sys.exit(1)
+    # Check dependencies but don't exit on failure
+    deps = check_dependencies()
+    print("\nDependency Status:")
+    for key, value in deps.items():
+        print(f"  {key}: {value}")
+    
+    print("\n🌐 Starting web interface...")
+    print("\n📍 Access the debug interface at: http://localhost:5000")
+    print("\n🚀 Ready for debugging!")
+    
+    # Start Flask app
+    app.run(host='0.0.0.0', port=5000, debug=False)
