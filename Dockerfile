@@ -1,33 +1,55 @@
-# Build stage
-FROM node:23-alpine AS builder
-WORKDIR /app
+# Use Node.js with Debian slim for better Playwright compatibility
+FROM node:23-slim
+
+# Install Python and system dependencies required for Playwright
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    wget \
+    gnupg \
+    ca-certificates \
+    fonts-liberation \
+    libasound2 \
+    libatk-bridge2.0-0 \
+    libatk1.0-0 \
+    libatspi2.0-0 \
+    libcups2 \
+    libdbus-1-3 \
+    libdrm2 \
+    libgtk-3-0 \
+    libnspr4 \
+    libnss3 \
+    libwayland-client0 \
+    libx11-6 \
+    libx11-xcb1 \
+    libxcb1 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxext6 \
+    libxfixes3 \
+    libxrandr2 \
+    libxss1 \
+    libxtst6 \
+    lsb-release \
+    xdg-utils \
+    libu2f-udev \
+    libvulkan1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm
 RUN npm install -g pnpm@latest
 
-# Runtime stage
-FROM python:3.11-alpine
-
-# Copy Node.js from builder
-COPY --from=builder /usr/local/bin/node /usr/local/bin/
-COPY --from=builder /usr/local/bin/npm /usr/local/bin/
-COPY --from=builder /usr/local/bin/pnpm /usr/local/bin/
-COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
-
-# Install system dependencies
-RUN apk add --no-cache \
-    ffmpeg \
-    chromium \
-    nss \
-    freetype \
-    harfbuzz \
-    ca-certificates \
-    ttf-freefont
+# Create a symlink for python
+RUN ln -sf /usr/bin/python3 /usr/bin/python
 
 # Set working directory
 WORKDIR /app
 
 # Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers
 RUN playwright install --with-deps chromium
