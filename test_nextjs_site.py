@@ -40,7 +40,7 @@ def get_free_port() -> int:
         s.bind(('', 0))
         return s.getsockname()[1]
 
-def load_test_data(csv_filepath="weby_eval_run_generated_4d377292.csv"):
+def load_test_data(csv_filepath="weby_eval_run_generated_b592c74d.csv"):
     """Loads test data from a CSV file or uses fallback data."""
     test_cases = []
     config = getattr(pytest, 'global_test_context', {}).get('config', None)
@@ -142,8 +142,42 @@ def get_error_summary_from_stderr(stderr_text: str, max_lines: int = 10) -> str:
 def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
     base_tmp_dir, tesslate_response_content, input_question, site_identifier = site_data_and_tmp_dir
     
+    # Add timestamp for unique test run identification
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Configure suite with timestamp for multiple runs tracking
+    allure.dynamic.suite(f"NextJS_Testing_{run_timestamp}")
+    allure.dynamic.sub_suite(f"Site_{site_identifier}")
+    
     allure.dynamic.title(f"Test Next.js Site Build & UI: {site_identifier}")
-    allure.dynamic.description(f"Input Question: {input_question}\nBase Temp Dir: {base_tmp_dir}")
+    allure.dynamic.description(f"Run: {run_timestamp}\nInput Question: {input_question}\nBase Temp Dir: {base_tmp_dir}")
+    
+    # Add run timestamp as parameter for filtering
+    allure.dynamic.parameter("Run Timestamp", run_timestamp)
+    allure.dynamic.parameter("Site Directory", actual_site_directory or "Not created")
+    
+    # Add initial step to save original prompt and generated site content
+    with allure.step("Save Original Prompt and Generated Site Content"):
+        # Attach the original input question/prompt
+        allure.attach(
+            input_question,
+            name="Prompt",
+            attachment_type=allure.attachment_type.TEXT
+        )
+        
+        # Attach the generated site content (LLM response)
+        allure.attach(
+            tesslate_response_content,
+            name="LLM Response",
+            attachment_type=allure.attachment_type.TEXT
+        )
+        
+        # Attach site identifier for reference
+        allure.attach(
+            f"Site Identifier: {site_identifier}\nBase Directory: {base_tmp_dir}",
+            name="Site Generation Metadata",
+            attachment_type=allure.attachment_type.TEXT
+        )
 
     results = process_generated_site(tesslate_response_content, base_tmp_dir, site_identifier)
     
@@ -165,7 +199,7 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
         "Shadcn Init": "shadcn_init_success",
         "Shadcn Add Components": "shadcn_add_success",
         "Apply LLM Code": "llm_files_write_success",
-        "Auto Import Fix": "auto_fix_success",
+        #"Auto Import Fix": "auto_fix_success",
         "pnpm Install (extra)": "pnpm_install_extra_success_optional",
         "ESLint Fix": "eslint_fix_success_optional", 
         "Prettier Format": "prettier_success_optional", 
@@ -188,6 +222,29 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                 step_title = f"{stage_name} - COMPLETED WITH ISSUES (RC: {stage_output_data.get('returncode')})"
 
             with allure.step(step_title):
+                # Add original prompt and generated site content for pnpm Build stage
+                if stage_name == "pnpm Build":
+                    # Attach the original input question/prompt
+                    allure.attach(
+                        input_question,
+                        name="Original Input Prompt",
+                        attachment_type=allure.attachment_type.TEXT
+                    )
+                    
+                    # Attach the generated site content (LLM response)
+                    allure.attach(
+                        tesslate_response_content,
+                        name="Generated Site Content (LLM Response)",
+                        attachment_type=allure.attachment_type.TEXT
+                    )
+                    
+                    # Attach site identifier for reference
+                    allure.attach(
+                        f"Site Identifier: {site_identifier}\nBase Directory: {base_tmp_dir}",
+                        name="Site Generation Metadata",
+                        attachment_type=allure.attachment_type.TEXT
+                    )
+                
                 combined_log_output = ""
                 stderr_content_for_assert = ""
                 if stage_output_data:

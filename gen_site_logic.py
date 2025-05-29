@@ -97,12 +97,12 @@ ADDITIONAL_DEV_DEPENDENCIES: dict[str, str] = {
 # --- Templates for essential configuration and placeholder files ---
 APP_LAYOUT_TSX_TEMPLATE = """
 import './globals.css';
-import { Inter as FontSans } from 'next/font/google';
+import { Inter as fontSans } from 'next/font/google';
 import { cn } from '@/lib/utils';
 import { Toaster } from '@/components/ui/sonner';
 import { ThemeProvider } from '@/components/theme-provider';
 
-const fontSans = FontSans({
+const fontSans = fontSans({
   subsets: ['latin'],
   variable: '--font-sans',
 });
@@ -481,8 +481,8 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
 
 
     # Create/Overwrite standard template files
-    _create_file_with_content(os.path.join(project_path, 'src', 'app', 'layout.tsx'), APP_LAYOUT_TSX_TEMPLATE, results, "Template: src/app/layout.tsx")
-    _create_file_with_content(os.path.join(project_path, 'src', 'app', 'page.tsx'), APP_PAGE_TSX_TEMPLATE, results, "Template: src/app/page.tsx")
+    #_create_file_with_content(os.path.join(project_path, 'src', 'app', 'layout.tsx'), APP_LAYOUT_TSX_TEMPLATE, results, "Template: src/app/layout.tsx")
+    #_create_file_with_content(os.path.join(project_path, 'src', 'app', 'page.tsx'), APP_PAGE_TSX_TEMPLATE, results, "Template: src/app/page.tsx")
     utils_path = os.path.join(project_path, 'src', 'lib', 'utils.ts')
     if not os.path.exists(utils_path): # shadcn init should create this
         os.makedirs(os.path.join(project_path, 'src', 'lib'), exist_ok=True)
@@ -575,20 +575,20 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
         print(f"[{time.strftime('%H:%M:%S')}] Error writing one or more LLM files for {site_identifier}. Aborting build process.")
         return results # Stop if LLM files couldn't be written
 
-    stage_name_auto_fix = "Auto Import Fix"
-    results["project_setup_stages"].append(stage_name_auto_fix)
+    #stage_name_auto_fix = "Auto Import Fix"
+    #results["project_setup_stages"].append(stage_name_auto_fix)
 
-    auto_import_script = os.path.join(os.path.dirname(__file__), "auto_fix_imports.py")
-    auto_fix_cmd = [sys.executable, auto_import_script, os.path.join(project_final_path, "src")]
+    #auto_import_script = os.path.join(os.path.dirname(__file__), "auto_fix_imports.py")
+    #auto_fix_cmd = [sys.executable, auto_import_script, os.path.join(project_final_path, "src")]
 
-    auto_fix_success = _run_command_util(
-        auto_fix_cmd,
-        cwd=project_final_path,
-        results_dict=results,
-        timeout=120,
-        command_name=stage_name_auto_fix
-    )
-    results["auto_fix_success"] = auto_fix_success
+    #auto_fix_success = _run_command_util(
+    #    auto_fix_cmd,
+    #    cwd=project_final_path,
+    #    results_dict=results,
+    #    timeout=120,
+    #    command_name=stage_name_auto_fix
+    #)
+    #results["auto_fix_success"] = auto_fix_success
 
     # Add
     external_pkgs = set()
