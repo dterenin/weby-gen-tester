@@ -3,6 +3,6 @@ playwright
 requests
 allure-pytest
 pytest-assume
-flask
+streamlit
 pytest-playwright
 pytest-xdist
