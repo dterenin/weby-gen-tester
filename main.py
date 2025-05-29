@@ -2,10 +2,8 @@ import subprocess
 import sys
 import os
 import signal
-import time
 from flask import Flask, render_template_string, request, jsonify
 import threading
-import json
 from datetime import datetime
 
 app = Flask(__name__)
@@ -19,71 +17,33 @@ def signal_handler(sig, frame):
     print('\nShutting down NextJS Web Tester...')
     sys.exit(0)
 
-def check_dependencies():
-    """Check if required dependencies are available"""
-    deps_status = {}
-    
-    try:
-        # Check Node.js
-        node_result = subprocess.run(['node', '--version'], capture_output=True, text=True)
-        if node_result.returncode == 0:
-            deps_status['node'] = f"✓ Node.js: {node_result.stdout.strip()}"
-        else:
-            deps_status['node'] = "✗ Node.js not found"
-            
-        # Check pnpm
-        pnpm_result = subprocess.run(['pnpm', '--version'], capture_output=True, text=True)
-        if pnpm_result.returncode == 0:
-            deps_status['pnpm'] = f"✓ pnpm: {pnpm_result.stdout.strip()}"
-        else:
-            deps_status['pnpm'] = "✗ pnpm not found"
-            
-        # Check Python
-        deps_status['python'] = f"✓ Python: {sys.version.split()[0]}"
-        
-        # Check PATH
-        deps_status['path'] = f"PATH: {os.environ.get('PATH', 'Not found')}"
-        
-        # Check which node
-        which_result = subprocess.run(['which', 'node'], capture_output=True, text=True)
-        if which_result.returncode == 0:
-            deps_status['node_path'] = f"Node path: {which_result.stdout.strip()}"
-        else:
-            deps_status['node_path'] = "Node path: not found"
-            
-        return deps_status
-        
-    except Exception as e:
-        deps_status['error'] = f"Error checking dependencies: {e}"
-        return deps_status
-
-def run_tests_async(test_command):
-    """Run tests in background thread"""
+def run_command_async(command):
+    """Run command in background thread"""
     global test_running, last_test_output, test_results
     
     test_running = True
     try:
         result = subprocess.run(
-            test_command, 
+            command, 
             capture_output=True, 
             text=True, 
             shell=True
         )
         
-        last_test_output = f"STDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}"
+        last_test_output = f"Command: {command}\n\nSTDOUT:\n{result.stdout}\n\nSTDERR:\n{result.stderr}\n\nReturn code: {result.returncode}"
         test_results = {
             'returncode': result.returncode,
             'stdout': result.stdout,
             'stderr': result.stderr,
             'timestamp': datetime.now().isoformat(),
-            'command': test_command
+            'command': command
         }
     except Exception as e:
-        last_test_output = f"Error running tests: {str(e)}"
+        last_test_output = f"Error running command '{command}': {str(e)}"
         test_results = {
             'error': str(e),
             'timestamp': datetime.now().isoformat(),
-            'command': test_command
+            'command': command
         }
     finally:
         test_running = False
@@ -101,51 +61,62 @@ HTML_TEMPLATE = """
         .section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
         .button { background: #2563eb; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
         .button:hover { background: #1d4ed8; }
+        .button:disabled { background: #9ca3af; cursor: not-allowed; }
         .output { background: #1f2937; color: #f9fafb; padding: 15px; border-radius: 5px; font-family: monospace; white-space: pre-wrap; max-height: 400px; overflow-y: auto; }
-        .deps { background: #f3f4f6; padding: 10px; border-radius: 5px; font-family: monospace; }
+        .input-group { margin: 10px 0; }
+        .input-group input { width: 70%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .status { padding: 10px; border-radius: 5px; margin: 10px 0; background: #f3f4f6; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h1>🧪 NextJS Web Tester - Debug Interface</h1>
-            <p>Debug interface for dependency checking and test execution</p>
+            <p>Simple debug interface - Node.js dependency check bypassed</p>
         </div>
         
         <div class="section">
-            <h2>System Dependencies</h2>
-            <div id="dependencies" class="deps">Loading...</div>
-            <button class="button" onclick="checkDeps()">Refresh Dependencies</button>
+            <h2>System Check Commands</h2>
+            <button class="button" onclick="runCommand('python3 --version')">Check Python</button>
+            <button class="button" onclick="runCommand('which python3')">Python Path</button>
+            <button class="button" onclick="runCommand('ls -la /usr/local/bin/ | grep node')">Find Node</button>
+            <button class="button" onclick="runCommand('echo $PATH')">Check PATH</button>
+            <button class="button" onclick="runCommand('whoami')">Current User</button>
+            <button class="button" onclick="runCommand('pwd')">Current Directory</button>
         </div>
         
         <div class="section">
             <h2>Test Commands</h2>
-            <button class="button" onclick="runTest('python3 --version')">Check Python</button>
-            <button class="button" onclick="runTest('pytest --version')">Check Pytest</button>
-            <button class="button" onclick="runTest('pytest test_nextjs_site.py -v --tb=short')">Run Tests</button>
+            <button class="button" onclick="runCommand('pytest --version')">Check Pytest</button>
+            <button class="button" onclick="runCommand('ls -la')">List Files</button>
+            <button class="button" onclick="runCommand('python3 -c \"import playwright; print(\\\"Playwright OK\\\")\\\"\')">Check Playwright</button>
+            <button class="button" onclick="runCommand('pytest test_nextjs_site.py --collect-only')">Collect Tests</button>
         </div>
         
         <div class="section">
-            <h2>Test Output</h2>
-            <div id="output" class="output">No tests run yet...</div>
+            <h2>Custom Command</h2>
+            <div class="input-group">
+                <input type="text" id="customCommand" placeholder="Enter any shell command" value="ls -la">
+                <button class="button" onclick="runCustomCommand()">Run Command</button>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>Status</h2>
+            <div id="status" class="status">Ready</div>
+        </div>
+        
+        <div class="section">
+            <h2>Command Output</h2>
+            <div id="output" class="output">No commands run yet...</div>
         </div>
     </div>
     
     <script>
-        function checkDeps() {
-            fetch('/dependencies')
-            .then(response => response.json())
-            .then(data => {
-                let html = '';
-                for (const [key, value] of Object.entries(data)) {
-                    html += key + ': ' + value + '\n';
-                }
-                document.getElementById('dependencies').textContent = html;
-            });
-        }
-        
-        function runTest(command) {
-            fetch('/run-test', {
+        function runCommand(command) {
+            document.getElementById('status').textContent = 'Running: ' + command;
+            
+            fetch('/run-command', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({command: command})
@@ -153,26 +124,51 @@ HTML_TEMPLATE = """
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    setTimeout(checkStatus, 1000);
+                    setTimeout(checkStatus, 500);
+                } else {
+                    document.getElementById('status').textContent = 'Error: ' + data.message;
                 }
+            })
+            .catch(error => {
+                document.getElementById('status').textContent = 'Network error: ' + error;
             });
+        }
+        
+        function runCustomCommand() {
+            const command = document.getElementById('customCommand').value;
+            if (command.trim()) {
+                runCommand(command);
+            }
         }
         
         function checkStatus() {
             fetch('/status')
             .then(response => response.json())
             .then(data => {
-                if (data.output) {
-                    document.getElementById('output').textContent = data.output;
-                }
                 if (data.running) {
-                    setTimeout(checkStatus, 2000);
+                    document.getElementById('status').textContent = 'Command running...';
+                    setTimeout(checkStatus, 1000);
+                } else {
+                    document.getElementById('status').textContent = 'Ready';
+                    if (data.output) {
+                        document.getElementById('output').textContent = data.output;
+                        document.getElementById('output').scrollTop = document.getElementById('output').scrollHeight;
+                    }
                 }
+            })
+            .catch(error => {
+                console.error('Status check error:', error);
             });
         }
         
-        // Load dependencies on page load
-        checkDeps();
+        // Allow Enter key in input field
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('customCommand').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    runCustomCommand();
+                }
+            });
+        });
     </script>
 </body>
 </html>
@@ -182,22 +178,18 @@ HTML_TEMPLATE = """
 def index():
     return render_template_string(HTML_TEMPLATE)
 
-@app.route('/dependencies')
-def dependencies():
-    return jsonify(check_dependencies())
-
-@app.route('/run-test', methods=['POST'])
-def run_test():
+@app.route('/run-command', methods=['POST'])
+def run_command():
     global test_running
     
     if test_running:
-        return jsonify({'success': False, 'message': 'Tests are already running'})
+        return jsonify({'success': False, 'message': 'Another command is already running'})
     
     data = request.get_json()
-    command = data.get('command', 'python3 --version')
+    command = data.get('command', 'echo "No command specified"')
     
-    # Start tests in background thread
-    thread = threading.Thread(target=run_tests_async, args=(command,))
+    # Start command in background thread
+    thread = threading.Thread(target=run_command_async, args=(command,))
     thread.daemon = True
     thread.start()
     
@@ -213,24 +205,27 @@ def status():
 
 @app.route('/health')
 def health():
-    return jsonify({'status': 'healthy', 'timestamp': datetime.now().isoformat()})
+    return jsonify({
+        'status': 'healthy', 
+        'timestamp': datetime.now().isoformat(),
+        'python_version': sys.version,
+        'working_directory': os.getcwd()
+    })
 
 if __name__ == "__main__":
     # Setup signal handlers for graceful shutdown
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     
-    print("NextJS Web Tester is starting...")
-    
-    # Check dependencies but don't exit on failure
-    deps = check_dependencies()
-    print("\nDependency Status:")
-    for key, value in deps.items():
-        print(f"  {key}: {value}")
-    
-    print("\n🌐 Starting web interface...")
-    print("\n📍 Access the debug interface at: http://localhost:5000")
-    print("\n🚀 Ready for debugging!")
+    print("🚀 NextJS Web Tester - Debug Mode")
+    print("📍 Starting web interface at: http://localhost:5000")
+    print("🔧 Dependency checks bypassed - ready for debugging!")
+    print(f"📂 Working directory: {os.getcwd()}")
+    print(f"🐍 Python version: {sys.version.split()[0]}")
     
     # Start Flask app
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    try:
+        app.run(host='0.0.0.0', port=5000, debug=False)
+    except Exception as e:
+        print(f"❌ Failed to start web server: {e}")
+        sys.exit(1)
