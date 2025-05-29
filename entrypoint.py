@@ -5,78 +5,66 @@ import os
 import signal
 import sys
 from pathlib import Path
-import threading
-import http.server
-import socketserver
 
 def start_streamlit():
-    """Start Streamlit server"""
-    print("Starting Streamlit on port 8501...")
+    """Start Streamlit server on port 8501"""
+    print("🚀 Starting Streamlit on 0.0.0.0:8501...")
     return subprocess.Popen([
         "streamlit", "run", "main.py",
         "--server.address", "0.0.0.0",
-        "--server.port", "8501"
+        "--server.port", "8501",
+        "--server.headless", "true",
+        "--server.enableCORS", "false",
+        "--server.enableXsrfProtection", "false"
     ])
 
-def start_placeholder_server():
-    """Start placeholder HTTP server"""
-    class PlaceholderHandler(http.server.SimpleHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.send_header('Content-type', 'text/html; charset=utf-8')
-            self.end_headers()
-            html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <title>Allure Reports</title>
-                <style>
-                    body { font-family: Arial, sans-serif; margin: 40px; }
-                    .container { max-width: 600px; margin: 0 auto; text-align: center; }
-                    .status { color: #666; }
-                </style>
-            </head>
-            <body>
-                <div class="container">
-                    <h1>🧪 Allure Reports</h1>
-                    <p class="status">No test results available yet.</p>
-                    <p>Run some tests first to see the reports here!</p>
-                    <hr>
-                    <small>This service is running on port 8502</small>
-                </div>
-            </body>
-            </html>
-            """
-            self.wfile.write(html.encode('utf-8'))
-    
-    def run_server():
-        with socketserver.TCPServer(('0.0.0.0', 8502), PlaceholderHandler) as httpd:
-            print("Placeholder server running on port 8502...")
-            httpd.serve_forever()
-    
-    thread = threading.Thread(target=run_server, daemon=True)
-    thread.start()
-    return thread
-
 def start_allure_server():
-    """Start Allure server if results exist, otherwise placeholder"""
+    """Start Allure server on port 8502"""
     allure_results = Path("/app/allure-results")
     
     if allure_results.exists() and any(allure_results.iterdir()):
-        print("Starting Allure server on port 8502...")
+        print("📊 Starting Allure server on 0.0.0.0:8502...")
         return subprocess.Popen([
             "allure", "serve", "/app/allure-results",
             "--port", "8502",
             "--host", "0.0.0.0"
         ])
     else:
-        print("No Allure results found, starting placeholder server...")
-        start_placeholder_server()
-        return None
+        print("📊 Starting Allure placeholder on 0.0.0.0:8502...")
+        return subprocess.Popen([
+            "python3", "-c", """
+import http.server
+import socketserver
+
+class Handler(http.server.SimpleHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/html; charset=utf-8')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        html = '''<!DOCTYPE html>
+<html><head><title>Allure Reports - Port 8502</title>
+<style>body{font-family:Arial;text-align:center;margin:50px;background:#f5f5f5}
+.container{max-width:600px;margin:0 auto;background:white;padding:40px;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.1)}
+.status{color:#666;margin:20px 0}</style></head>
+<body><div class="container">
+<h1>🧪 Allure Reports</h1>
+<div class="status">Service running on port 8502</div>
+<p>No test results available yet.</p>
+<p>Run some tests to see reports here!</p>
+<hr><small>Railway Magic Port: 8502</small>
+</div></body></html>'''
+        self.wfile.write(html.encode('utf-8'))
+
+print('🌐 Allure placeholder server starting on 0.0.0.0:8502')
+with socketserver.TCPServer(('0.0.0.0', 8502), Handler) as httpd:
+    httpd.serve_forever()
+"""
+        ])
 
 def signal_handler(signum, frame):
     """Handle shutdown signals"""
-    print(f"Received signal {signum}, shutting down...")
+    print(f"🛑 Received signal {signum}, shutting down...")
     sys.exit(0)
 
 if __name__ == "__main__":
@@ -87,45 +75,48 @@ if __name__ == "__main__":
     processes = []
     
     try:
-        # Start Streamlit
-        streamlit_process = start_streamlit()
-        processes.append(streamlit_process)
+        print("🚀 Starting multi-port Railway service...")
         
-        # Wait a bit for Streamlit to initialize
+        # Start Streamlit (main service)
+        streamlit_proc = start_streamlit()
+        processes.append(streamlit_proc)
+        
+        # Wait for Streamlit to initialize
         time.sleep(3)
         
-        # Start Allure server or placeholder
-        allure_process = start_allure_server()
-        if allure_process:
-            processes.append(allure_process)
+        # Start Allure server (secondary service)
+        allure_proc = start_allure_server()
+        processes.append(allure_proc)
         
-        print("All services started successfully!")
-        print("Streamlit: http://localhost:8501")
-        print("Allure: http://localhost:8502")
+        print("✅ All services started successfully!")
+        print("📱 Streamlit: http://0.0.0.0:8501")
+        print("📊 Allure: http://0.0.0.0:8502")
+        print("🎯 Railway will auto-detect both ports for Magic Ports")
         
         # Keep the main process alive and monitor subprocesses
         while True:
-            for process in processes[:]:
-                if process.poll() is not None:
-                    print(f"Process {process.pid} exited with code {process.returncode}")
-                    processes.remove(process)
+            for proc in processes[:]:
+                if proc.poll() is not None:
+                    print(f"❌ Process {proc.pid} exited with code {proc.returncode}")
+                    processes.remove(proc)
                     if not processes:
-                        print("All processes exited, shutting down...")
+                        print("💥 All processes exited, shutting down...")
                         sys.exit(1)
-            time.sleep(1)
+            time.sleep(2)
             
     except KeyboardInterrupt:
-        print("Received interrupt signal, shutting down...")
+        print("⏹️ Received interrupt signal, shutting down...")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"❌ Error: {e}")
         sys.exit(1)
     finally:
         # Clean up processes
-        for process in processes:
+        print("🧹 Cleaning up processes...")
+        for proc in processes:
             try:
-                process.terminate()
-                process.wait(timeout=5)
+                proc.terminate()
+                proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                process.kill()
+                proc.kill()
             except Exception:
                 pass

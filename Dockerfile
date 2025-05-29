@@ -84,8 +84,9 @@ COPY . .
 COPY entrypoint.py /app/entrypoint.py
 RUN chmod +x /app/entrypoint.py
 
-# Expose ports
-EXPOSE 8501 8502
+# ВАЖНО: Expose оба порта для Railway Magic Ports
+EXPOSE 8501
+EXPOSE 8502
 
-# Use Python entrypoint
+# Use entrypoint for multi-port setup
 CMD ["python3", "/app/entrypoint.py"]
