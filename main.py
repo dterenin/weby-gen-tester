@@ -36,10 +36,6 @@ def check_dependencies():
         return False
 
 if __name__ == "__main__":
-    # Setup signal handlers for graceful shutdown
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    
     print("NextJS Web Tester is starting...")
     
     if check_dependencies():
