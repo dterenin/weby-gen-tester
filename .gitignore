@@ -2,14 +2,17 @@
 *.zip
 *.txt
 *.ipynb
+.env
 
 .pytest_cache
 .DS_Store
 .trae
 __pycache__
+__init__.py
 
+allure-report
 allure-results*
 table_reporter.py
 dataset_cleaner.py
 weby_eval_run*
-
+cache

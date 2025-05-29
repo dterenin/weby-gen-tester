@@ -2,6 +2,7 @@
 import json
 import os
 import glob
+import sys
 from pathlib import Path
 
 def extract_build_stderr(json_file_path):
@@ -32,14 +33,38 @@ def extract_build_stderr(json_file_path):
 
 def main():
     """Main function to process all JSON files and extract build errors."""
-    # Directory containing JSON files
-    base_dir = '/Users/machine/GVstudio/nextjs-web-tester/weby_eval_run_generated_772013ed'
+    # Check if directory path is provided as argument
+    if len(sys.argv) < 2:
+        print("Usage: python extract_build_errors.py <directory_path>")
+        print("Example: python extract_build_errors.py allure-results/test")
+        sys.exit(1)
+    
+    # Get directory path from command line argument
+    base_dir = sys.argv[1]
+    
+    # Convert to absolute path if relative path is provided
+    if not os.path.isabs(base_dir):
+        base_dir = os.path.abspath(base_dir)
+    
+    # Check if directory exists
+    if not os.path.exists(base_dir):
+        print(f"Error: Directory '{base_dir}' does not exist.")
+        sys.exit(1)
+    
+    if not os.path.isdir(base_dir):
+        print(f"Error: '{base_dir}' is not a directory.")
+        sys.exit(1)
     
     # Find all JSON files in the directory
     json_pattern = os.path.join(base_dir, '*.json')
     json_files = glob.glob(json_pattern)
     
+    print(f"Searching in directory: {base_dir}")
     print(f"Found {len(json_files)} JSON files to process...\n")
+    
+    if not json_files:
+        print("No JSON files found in the specified directory.")
+        return
     
     build_errors = []
     
@@ -62,11 +87,11 @@ def main():
             print(error['stderr'])
             print("\n" + "="*80 + "\n")
         
-        # Save to output file
+        # Save to output file in the same directory as the script
         output_file = 'build_errors_summary.txt'
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(f"pnpm Build STDERR Summary\n")
-            f.write(f"Generated from {len(json_files)} JSON files\n")
+            f.write(f"Generated from {len(json_files)} JSON files in: {base_dir}\n")
             f.write(f"Found {len(build_errors)} files with build errors\n\n")
             
             for i, error in enumerate(build_errors, 1):

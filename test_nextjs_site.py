@@ -42,7 +42,7 @@ def get_free_port() -> int:
         s.bind(('', 0))
         return s.getsockname()[1]
 
-def load_test_data(csv_filepath="weby_eval_run_generated_b592c74d.csv"):
+def load_test_data(csv_filepath=None):
     """Loads test data from a CSV file or uses fallback data."""
     test_cases = []
     config = getattr(pytest, 'global_test_context', {}).get('config', None)
@@ -55,6 +55,26 @@ def load_test_data(csv_filepath="weby_eval_run_generated_b592c74d.csv"):
         output_response_field = getattr(config.option, "csv_output_field", output_response_field)
         framework_field = getattr(config.option, "csv_framework_field", framework_field)
         input_question_field = getattr(config.option, "csv_input_field", input_question_field)
+    
+    # If no specific CSV file is provided, find the most recent one in datasets folder
+    if csv_filepath is None:
+        datasets_dir = "datasets"
+        if os.path.exists(datasets_dir):
+            csv_files = glob.glob(os.path.join(datasets_dir, "*.csv"))
+            if csv_files:
+                # Sort by modification time, newest first
+                csv_filepath = max(csv_files, key=os.path.getmtime)
+                print(f"INFO: Using most recent CSV file: {csv_filepath}")
+            else:
+                print(f"WARNING: No CSV files found in {datasets_dir} folder. Using fallback.")
+                return [("fallback_site_0", LLM_TEST_RESPONSE_FALLBACK, "Fallback: No CSV files in datasets")]
+        else:
+            print(f"WARNING: {datasets_dir} folder not found. Using fallback.")
+            return [("fallback_site_0", LLM_TEST_RESPONSE_FALLBACK, "Fallback: datasets folder not found")]
+    
+    # Fallback to default filename if still None
+    if csv_filepath is None:
+        csv_filepath = "weby_eval_run_generated_b592c74d.csv"
     
     if not os.path.exists(csv_filepath):
         print(f"WARNING: CSV file not found: {csv_filepath}. Using fallback for one test.")
