@@ -3,3 +3,4 @@ playwright
 requests
 allure-pytest
 pytest-assume
+flask
