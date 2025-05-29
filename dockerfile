@@ -23,6 +23,9 @@ RUN apt-get update && apt-get install -y \
     libdbus-1-3 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install pnpm globally
+RUN npm install -g pnpm@latest
+
 # Set working directory inside the container
 WORKDIR /app
 
@@ -44,5 +47,8 @@ ARG GID=1000
 RUN groupadd -g $GID appuser && useradd -u $UID -g $GID -m appuser
 USER appuser
 
+# Copy all project files
+COPY --chown=appuser:appuser . .
+
 # Command to keep the container running for debugging if needed, or just exit
-CMD ["tail", "-f", "/dev/null"]
+CMD ["python3", "main.py"]
