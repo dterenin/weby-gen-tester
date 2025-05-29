@@ -64,5 +64,8 @@ COPY . .
 # Expose port
 EXPOSE 5000
 
+# Install Allure via npm
+RUN npm install -g allure-commandline
+
 # Run the application
 CMD ["python3", "main.py"]
