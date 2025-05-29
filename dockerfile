@@ -1,55 +1,42 @@
-# Use Ubuntu base image and install Node.js manually
-FROM ubuntu:22.04
-
-# Install Node.js, npm, and other dependencies
-RUN apt-get update && apt-get install -y \
-    curl \
-    python3 \
-    python3-pip \
-    ffmpeg \
-    libnss3 \
-    libfontconfig1 \
-    libgbm-dev \
-    libatk-bridge2.0-0 \
-    libgtk-3-0 \
-    libasound2 \
-    libcups2 \
-    libnspr4 \
-    libxkbcommon0 \
-    libxrandr2 \
-    libxi6 \
-    libglib2.0-0 \
-    libdbus-1-3 \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Node.js 23.x (latest)
-RUN curl -fsSL https://deb.nodesource.com/setup_23.x | bash - \
-    && apt-get install -y nodejs
-
-# Install pnpm globally
+# Build stage
+FROM node:23-alpine AS builder
+WORKDIR /app
 RUN npm install -g pnpm@latest
 
-# Verify installations
-RUN node --version && npm --version && pnpm --version && python3 --version
+# Runtime stage
+FROM python:3.11-alpine
 
-# Set working directory inside the container
+# Copy Node.js from builder
+COPY --from=builder /usr/local/bin/node /usr/local/bin/
+COPY --from=builder /usr/local/bin/npm /usr/local/bin/
+COPY --from=builder /usr/local/bin/pnpm /usr/local/bin/
+COPY --from=builder /usr/local/lib/node_modules /usr/local/lib/node_modules
+
+# Install system dependencies
+RUN apk add --no-cache \
+    ffmpeg \
+    chromium \
+    nss \
+    freetype \
+    harfbuzz \
+    ca-certificates \
+    ttf-freefont
+
+# Set working directory
 WORKDIR /app
 
-# Copy Python requirements and install them
+# Copy and install Python dependencies
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers
-RUN playwright install --with-deps chromium firefox webkit
+RUN playwright install --with-deps chromium
 
-# Copy all project files
+# Copy project files
 COPY . .
 
-# Make sure all binaries are accessible
-ENV PATH=/usr/local/bin:/usr/bin:/bin:$PATH
-
-# Expose port for Flask app
+# Expose port
 EXPOSE 5000
 
-# Command to run the application
+# Run the application
 CMD ["python3", "main.py"]

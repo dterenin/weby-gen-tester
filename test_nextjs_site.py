@@ -156,7 +156,8 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
     
     # Add run timestamp as parameter for filtering
     allure.dynamic.parameter("Run Timestamp", run_timestamp)
-    allure.dynamic.parameter("Site Directory", actual_site_directory or "Not created")
+    # Remove this line - actual_site_directory is not defined yet
+    # allure.dynamic.parameter("Site Directory", actual_site_directory or "Not created")
     
     # Add initial step to save original prompt and generated site content
     with allure.step("Save Original Prompt and Generated Site Content"):
