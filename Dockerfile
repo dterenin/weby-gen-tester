@@ -1,11 +1,12 @@
-# Use Node.js with Debian slim for better Playwright compatibility
+# Use Node.js 23 slim as base image
 FROM node:23-slim
 
-# Install Python and system dependencies required for Playwright
+# Install Python, Java, and system dependencies required for Playwright
 RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
+    openjdk-11-jre-headless \
     curl \
     wget \
     gnupg \
@@ -38,6 +39,10 @@ RUN apt-get update && apt-get install -y \
     libvulkan1 \
     && rm -rf /var/lib/apt/lists/*
 
+# Set JAVA_HOME environment variable
+ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+ENV PATH="$JAVA_HOME/bin:$PATH"
+
 # Install pnpm
 RUN npm install -g pnpm@latest
 
@@ -64,8 +69,11 @@ COPY . .
 # Expose port
 EXPOSE 5000
 
-# Install Allure via npm
+# Install Allure via npm (Java is now available)
 RUN npm install -g allure-commandline
+
+# Verify Java and Allure installation
+RUN java -version && allure --version
 
 # Run the application
 CMD ["python3", "main.py"]
