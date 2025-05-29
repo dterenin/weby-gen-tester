@@ -1,16 +1,26 @@
 # Use Node.js 23 slim as base image
 FROM node:23-slim
 
-# Install Python, Java, and system dependencies required for Playwright
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
-    openjdk-11-jre-headless \
+# Update package lists
+RUN apt-get update
+
+# Install basic system dependencies
+RUN apt-get install -y \
     curl \
     wget \
     gnupg \
     ca-certificates \
+    lsb-release
+
+# Install Python and Java
+RUN apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    openjdk-11-jre-headless
+
+# Install Playwright system dependencies
+RUN apt-get install -y \
     fonts-liberation \
     libasound2 \
     libatk-bridge2.0-0 \
@@ -22,7 +32,10 @@ RUN apt-get update && apt-get install -y \
     libgtk-3-0 \
     libnspr4 \
     libnss3 \
-    libwayland-client0 \
+    libwayland-client0
+
+# Install additional X11 and graphics libraries
+RUN apt-get install -y \
     libx11-6 \
     libx11-xcb1 \
     libxcb1 \
@@ -33,11 +46,12 @@ RUN apt-get update && apt-get install -y \
     libxrandr2 \
     libxss1 \
     libxtst6 \
-    lsb-release \
     xdg-utils \
     libu2f-udev \
-    libvulkan1 \
-    && rm -rf /var/lib/apt/lists/*
+    libvulkan1
+
+# Clean up apt cache
+RUN rm -rf /var/lib/apt/lists/*
 
 # Set JAVA_HOME environment variable
 ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
