@@ -18,7 +18,7 @@ RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
     && apt-get install -y nodejs
 
 # Install Java (required for Allure)
-RUN apt-get update && apt-get install -y openjdk-11-jre-headless
+RUN apt-get update && apt-get install -y openjdk-17-jre-headless
 
 # Install Playwright dependencies
 RUN apt-get update && apt-get install -y \
