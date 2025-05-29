@@ -47,9 +47,13 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python
 # Set working directory
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Copy requirements file
 COPY requirements.txt .
-RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Create virtual environment and install Python dependencies
+RUN python3 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers
 RUN playwright install --with-deps chromium
