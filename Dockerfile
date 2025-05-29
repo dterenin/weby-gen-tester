@@ -81,7 +81,7 @@ RUN playwright install --with-deps chromium
 COPY . .
 
 # Expose port for Streamlit (default 8501)
-EXPOSE 8501
+EXPOSE 8501, 8502
 
 # Install Allure via npm
 RUN npm install -g allure-commandline
