@@ -12,12 +12,12 @@ RUN apt-get install -y \
     ca-certificates \
     lsb-release
 
-# Install Python and Java
+# Install Python and Java (using correct package name for Debian Bookworm)
 RUN apt-get install -y \
     python3 \
     python3-pip \
     python3-venv \
-    openjdk-11-jre-headless
+    openjdk-17-jre-headless
 
 # Install Playwright system dependencies
 RUN apt-get install -y \
@@ -53,8 +53,8 @@ RUN apt-get install -y \
 # Clean up apt cache
 RUN rm -rf /var/lib/apt/lists/*
 
-# Set JAVA_HOME environment variable
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+# Set JAVA_HOME environment variable (updated for Java 17)
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 ENV PATH="$JAVA_HOME/bin:$PATH"
 
 # Install pnpm
