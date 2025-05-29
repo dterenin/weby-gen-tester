@@ -7,6 +7,7 @@ import time
 from datetime import datetime
 import json
 import queue
+from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 
 # Configure Streamlit page
@@ -147,6 +148,74 @@ def stop_current_command():
         except Exception as e:
             st.session_state.live_output += f"\n[ERROR] Failed to stop command: {str(e)}\n"
 
+def generate_allure_report(folder_name, output_format='html'):
+    """Generate Allure report in specified format"""
+    try:
+        # Check if folder exists
+        folder_path = Path(folder_name)
+        if not folder_path.exists():
+            return False, f"Folder '{folder_name}' does not exist"
+        
+        # Check if folder contains allure results
+        if not any(folder_path.glob("*.json")):
+            return False, f"No Allure result files found in '{folder_name}'"
+        
+        # Generate report filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        if output_format == 'single-file':
+            report_filename = f"allure_report_{timestamp}.html"
+            command = f"allure generate {folder_name} --single-file --output temp_report && mv temp_report/index.html {report_filename} && rm -rf temp_report"
+        else:
+            report_dir = f"allure_report_{timestamp}"
+            command = f"allure generate {folder_name} --output {report_dir}"
+            report_filename = report_dir
+        
+        result = subprocess.run(
+            command,
+            shell=True,
+            capture_output=True,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            if Path(report_filename).exists():
+                return True, report_filename
+            else:
+                return False, "Report file/directory was not created"
+        else:
+            return False, f"Allure command failed: {result.stderr}"
+            
+    except Exception as e:
+        return False, f"Error generating report: {str(e)}"
+
+def get_available_folders():
+    """Get list of available folders that might contain Allure results"""
+    folders = []
+    current_dir = Path(".")
+    
+    for item in current_dir.iterdir():
+        if item.is_dir() and not item.name.startswith('.'):
+            # Check if folder contains JSON files (potential Allure results)
+            if any(item.glob("*.json")):
+                folders.append(item.name)
+    
+    return folders
+
+def clean_allure_results(folder_name):
+    """Clean Allure results folder"""
+    try:
+        folder_path = Path(folder_name)
+        if folder_path.exists():
+            import shutil
+            shutil.rmtree(folder_path)
+            folder_path.mkdir()
+            return True, f"Cleaned folder '{folder_name}'"
+        else:
+            return False, f"Folder '{folder_name}' does not exist"
+    except Exception as e:
+        return False, f"Error cleaning folder: {str(e)}"
+
 # Sidebar with system info
 with st.sidebar:
     st.header("📊 System Info")
@@ -164,7 +233,8 @@ with st.sidebar:
             status_emoji = {
                 'running': '🔄',
                 'completed': '✅' if cmd.get('returncode', 0) == 0 else '❌',
-                'error': '💥'
+                'error': '💥',
+                'stopped': '⏹️'
             }.get(cmd['status'], '❓')
             
             st.text(f"{status_emoji} {cmd['command'][:30]}...")
@@ -172,39 +242,15 @@ with st.sidebar:
         st.text("No commands yet")
 
 # Main content area
+st.header("🧪 Test Commands")
+
 col1, col2 = st.columns([1, 1])
 
 with col1:
-    st.header("🔧 System Check Commands")
-    
-    system_commands = [
-        ("Check Python", "python3 --version"),
-        ("Python Path", "which python3"),
-        ("Find Node", "ls -la /usr/local/bin/ | grep node"),
-        ("Check PATH", "echo $PATH"),
-        ("Current User", "whoami"),
-        ("Current Directory", "pwd")
-    ]
-    
-    for label, cmd in system_commands:
-        if st.button(label, key=f"sys_{cmd}", disabled=st.session_state.test_running):
-            success, output = run_command_async(cmd)
-            if success:
-                st.success(f"Command started: {label}")
-            else:
-                st.error(f"Command failed to start: {label}")
-            st.rerun()
-
-with col2:
-    st.header("🧪 Test Commands")
-    
     test_commands = [
         ("Check Pytest", "pytest --version"),
         ("List Files", "ls -la"),
-        ("Check Playwright", "python3 -c \"import playwright; print('Playwright OK')\""),
-        ("Collect Tests", "pytest test_nextjs_site.py --collect-only"),
-        ("Run Tests", "pytest test_nextjs_site.py -v"),
-        ("Generate Allure Report", "pytest test_nextjs_site.py --alluredir=allure-results")
+        ("Check Playwright", "python3 -c \"import playwright; print('Playwright OK')\"")
     ]
     
     for label, cmd in test_commands:
@@ -215,6 +261,147 @@ with col2:
             else:
                 st.error(f"Command failed to start: {label}")
             st.rerun()
+
+with col2:
+    test_commands_2 = [
+        ("Run All Tests", "pytest test_nextjs_site.py -v"),
+        ("Generate Allure Results", "pytest test_nextjs_site.py --alluredir=allure-results"),
+        ("Run Tests + Allure", "pytest test_nextjs_site.py -v --alluredir=allure-results")
+    ]
+    
+    for label, cmd in test_commands_2:
+        if st.button(label, key=f"test2_{cmd}", disabled=st.session_state.test_running):
+            success, output = run_command_async(cmd)
+            if success:
+                st.success(f"Command started: {label}")
+            else:
+                st.error(f"Command failed to start: {label}")
+            st.rerun()
+
+# Enhanced Allure Management Section
+st.header("📊 Allure Report Management")
+
+# Allure folder selection
+col1, col2, col3 = st.columns([2, 1, 1])
+
+with col1:
+    available_folders = get_available_folders()
+    
+    if available_folders:
+        folder_option = st.selectbox(
+            "Select folder with Allure results:",
+            options=["Custom..."] + available_folders,
+            disabled=st.session_state.test_running
+        )
+        
+        if folder_option == "Custom...":
+            allure_folder = st.text_input(
+                "Enter folder name:",
+                value="allure-results",
+                placeholder="e.g., allure-results",
+                disabled=st.session_state.test_running
+            )
+        else:
+            allure_folder = folder_option
+    else:
+        allure_folder = st.text_input(
+            "Enter folder name with Allure results:",
+            value="allure-results",
+            placeholder="e.g., allure-results",
+            disabled=st.session_state.test_running
+        )
+
+with col2:
+    st.write("")
+    st.write("")
+    if st.button("📁 List Folders", disabled=st.session_state.test_running):
+        folders = get_available_folders()
+        if folders:
+            st.success("Available folders with JSON files:")
+            for folder in folders:
+                json_count = len(list(Path(folder).glob("*.json")))
+                st.text(f"📁 {folder} ({json_count} files)")
+        else:
+            st.info("No folders with JSON files found")
+
+with col3:
+    st.write("")
+    st.write("")
+    if st.button("🗑️ Clean Results", disabled=st.session_state.test_running):
+        if allure_folder.strip():
+            success, message = clean_allure_results(allure_folder.strip())
+            if success:
+                st.success(message)
+            else:
+                st.error(message)
+        else:
+            st.warning("Please enter a folder name")
+
+# Report generation options
+st.subheader("📄 Generate Reports")
+
+col1, col2, col3 = st.columns([1, 1, 1])
+
+with col1:
+    if st.button("📄 Single File Report", type="primary", disabled=st.session_state.test_running):
+        if allure_folder.strip():
+            with st.spinner("Generating single-file Allure report..."):
+                success, result = generate_allure_report(allure_folder.strip(), 'single-file')
+                
+            if success:
+                st.success(f"Report generated: {result}")
+                
+                # Read the generated file for download
+                try:
+                    with open(result, 'rb') as file:
+                        file_data = file.read()
+                    
+                    st.download_button(
+                        label="⬇️ Download HTML Report",
+                        data=file_data,
+                        file_name=result,
+                        mime="text/html",
+                        key="download_single_report"
+                    )
+                    
+                    # Show file info
+                    file_size = len(file_data) / 1024  # KB
+                    st.info(f"File size: {file_size:.1f} KB")
+                    
+                except Exception as e:
+                    st.error(f"Error reading report file: {str(e)}")
+            else:
+                st.error(f"Failed to generate report: {result}")
+        else:
+            st.warning("Please enter a folder name")
+
+with col2:
+    if st.button("📁 Full Report Directory", disabled=st.session_state.test_running):
+        if allure_folder.strip():
+            with st.spinner("Generating full Allure report..."):
+                success, result = generate_allure_report(allure_folder.strip(), 'directory')
+                
+            if success:
+                st.success(f"Report directory created: {result}")
+                st.info(f"Open {result}/index.html in browser to view")
+            else:
+                st.error(f"Failed to generate report: {result}")
+        else:
+            st.warning("Please enter a folder name")
+
+with col3:
+    if st.button("🔄 Serve Report", disabled=st.session_state.test_running):
+        if allure_folder.strip():
+            serve_command = f"allure serve {allure_folder.strip()}"
+            success, output = run_command_async(serve_command)
+            if success:
+                st.success("Allure serve started")
+                st.info("Check the output below for the server URL")
+            else:
+                st.error("Failed to start Allure serve")
+            st.rerun()
+        else:
+            st.warning("Please enter a folder name")
 
 # Custom command section
 st.header("💻 Custom Command")
@@ -290,9 +477,8 @@ if st.session_state.test_running:
 
 # Footer
 st.markdown("---")
-st.markdown("**NextJS Web Tester** - Streamlit Edition with Real-time Output | Built with ❤️")
+st.markdown("**NextJS Web Tester** - Streamlit Edition with Enhanced Allure Management | Built with ❤️")
 
-# В основном коде добавить:
+# Auto-refresh during command execution
 if st.session_state.test_running:
-    # Автообновление каждые 500ms во время выполнения команды
     st_autorefresh(interval=500, key="live_update")

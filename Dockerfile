@@ -1,92 +1,65 @@
-# Use Node.js 23 slim as base image
-FROM node:23-slim
-
-# Update package lists
-RUN apt-get update
-
-# Install basic system dependencies
-RUN apt-get install -y \
-    curl \
-    wget \
-    gnupg \
-    ca-certificates \
-    lsb-release
-
-# Install Python and Java
-RUN apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-venv \
-    openjdk-17-jre-headless
-
-# Install Playwright system dependencies
-RUN apt-get install -y \
-    fonts-liberation \
-    libasound2 \
-    libatk-bridge2.0-0 \
-    libatk1.0-0 \
-    libatspi2.0-0 \
-    libcups2 \
-    libdbus-1-3 \
-    libdrm2 \
-    libgtk-3-0 \
-    libnspr4 \
-    libnss3 \
-    libwayland-client0
-
-# Install additional X11 and graphics libraries
-RUN apt-get install -y \
-    libx11-6 \
-    libx11-xcb1 \
-    libxcb1 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxext6 \
-    libxfixes3 \
-    libxrandr2 \
-    libxss1 \
-    libxtst6 \
-    xdg-utils \
-    libu2f-udev \
-    libvulkan1
-
-# Clean up apt cache
-RUN rm -rf /var/lib/apt/lists/*
-
-# Set JAVA_HOME environment variable
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-ENV PATH="$JAVA_HOME/bin:$PATH"
-
-# Install pnpm
-RUN npm install -g pnpm@latest
-
-# Create a symlink for python
-RUN ln -sf /usr/bin/python3 /usr/bin/python
+# Use Python 3.11 slim image
+FROM python:3.11-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy requirements file
-COPY requirements.txt .
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    curl \
+    wget \
+    gnupg \
+    software-properties-common \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Create virtual environment and install Python dependencies
-RUN python3 -m venv /opt/venv
-ENV PATH="/opt/venv/bin:$PATH"
-RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.txt
+# Install Node.js 18
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs
+
+# Install Java (required for Allure)
+RUN apt-get update && apt-get install -y openjdk-11-jre-headless
+
+# Install Playwright dependencies
+RUN apt-get update && apt-get install -y \
+    libnss3 \
+    libnspr4 \
+    libatk-bridge2.0-0 \
+    libdrm2 \
+    libxkbcommon0 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libxss1 \
+    libasound2 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install pnpm
+RUN npm install -g pnpm
+
+# Install Allure command line
+RUN wget https://github.com/allure-framework/allure2/releases/download/2.24.0/allure-2.24.0.tgz \
+    && tar -zxf allure-2.24.0.tgz \
+    && mv allure-2.24.0 /opt/allure \
+    && ln -s /opt/allure/bin/allure /usr/local/bin/allure \
+    && rm allure-2.24.0.tgz
+
+# Create directories
+RUN mkdir -p /app/allure-results /app/allure-report
+
+# Copy Python requirements and install
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Install Playwright browsers
-RUN playwright install --with-deps chromium
+RUN playwright install chromium
 
-# Copy project files
+# Copy application files
 COPY . .
 
-# Copy entrypoint script
-COPY entrypoint.py /app/entrypoint.py
-RUN chmod +x /app/entrypoint.py
-
-# ВАЖНО: Expose оба порта для Railway Magic Ports
+# Expose Streamlit port
 EXPOSE 8501
-EXPOSE 8502
 
-# Use entrypoint for multi-port setup
-CMD ["python3", "/app/entrypoint.py"]
+# Run Streamlit
+CMD ["streamlit", "run", "main.py", "--server.address", "0.0.0.0", "--server.port", "8501", "--server.headless", "true"]
