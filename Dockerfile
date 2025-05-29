@@ -80,15 +80,12 @@ RUN playwright install --with-deps chromium
 # Copy project files
 COPY . .
 
-# Expose port for Streamlit (default 8501)
-EXPOSE 8501
-EXPOSE 8502
+# Copy entrypoint script
+COPY entrypoint.py /app/entrypoint.py
+RUN chmod +x /app/entrypoint.py
 
-# Install Allure via npm
-RUN npm install -g allure-commandline
+# Expose ports
+EXPOSE 8501 8502
 
-# Create directories for reports
-RUN mkdir -p /app/allure-results /app/allure-reports
-
-# Run Streamlit app
-CMD ["streamlit", "run", "main.py", "--server.address", "0.0.0.0", "--server.port", "8501"]
+# Use Python entrypoint
+CMD ["python3", "/app/entrypoint.py"]

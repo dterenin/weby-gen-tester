@@ -1,8 +1,9 @@
-pytest
-playwright
-requests
 allure-pytest
+pytest
 pytest-assume
-streamlit
 pytest-playwright
 pytest-xdist
+playwright
+requests
+streamlit
+streamlit_autorefresh   
