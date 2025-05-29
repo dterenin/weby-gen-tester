@@ -4,3 +4,5 @@ requests
 allure-pytest
 pytest-assume
 flask
+pytest-playwright
+pytest-xdist
