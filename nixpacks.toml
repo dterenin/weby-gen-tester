@@ -1,0 +1,12 @@
+[phases.setup]
+nixPkgs = ["nodejs_23", "python3", "python3Packages.pip"]
+
+[phases.install]
+cmds = [
+  "npm install -g pnpm@latest",
+  "pip install -r requirements.txt",
+  "playwright install --with-deps chromium firefox webkit"
+]
+
+[start]
+cmd = "python3 main.py"
