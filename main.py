@@ -12,7 +12,7 @@ from streamlit_autorefresh import st_autorefresh
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="NextJS Web Tester",
+    page_title="weby-gen-tester",
     page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -153,6 +153,8 @@ with st.sidebar:
     st.header("📊 System Info")
     st.info(f"**Working Dir:** {os.getcwd()}")
     st.info(f"**Phoenix Traces:** [View Traces](https://arize-phoenix-production-a0af.up.railway.app/projects/UHJvamVjdDox/traces)")
+    st.info(f"**Service Deployment:** [Restart Service](https://railway.com/project/d0a9c47a-4057-4091-b7c8-b7b175b5535d/service/281fa7de-4b73-4b81-b920-7d6b7ceb0d29?environmentId=6b0b0aa3-4d15-4569-998f-3f059c2240c1)")
+    st.info(f"**Service Source:** [GitHub](https://github.com/dterenin/weby-gen-tester/tree/railway)")
     if st.button("🔄 Refresh"):
         st.rerun()
     
@@ -230,19 +232,38 @@ if allure_path.exists():
         with col2:
             st.write("")
             if st.button("📊 Generate Allure Report"):
-                cmd = f"allure generate --single-file allure-results/{selected_folder}"
+                cmd = f"allure generate --single-file allure-results/{selected_folder} -o allure-report"
                 success, output = run_command_async(cmd)
                 if success:
                     # Find generated report file and offer download
-                    report_file = Path("allure-report/index.html")
-                    if report_file.exists():
-                        with open(report_file, "rb") as f:
-                            st.download_button(
-                                label="⬇️ Download Report",
-                                data=f.read(),
-                                file_name=f"allure-report-{selected_folder}.html",
-                                mime="text/html"
-                            )
+                    report_dir = Path("allure-report")
+                    if report_dir.exists():
+                        # Look for HTML files in the report directory
+                        html_files = list(report_dir.glob("*.html"))
+                        if html_files:
+                            report_file = html_files[0]  # Take the first HTML file
+                            with open(report_file, "rb") as f:
+                                st.download_button(
+                                    label="⬇️ Download Report",
+                                    data=f.read(),
+                                    file_name=f"allure-report-{selected_folder}.html",
+                                    mime="text/html"
+                                )
+                        else:
+                            # Fallback: try index.html
+                            report_file = report_dir / "index.html"
+                            if report_file.exists():
+                                with open(report_file, "rb") as f:
+                                    st.download_button(
+                                        label="⬇️ Download Report",
+                                        data=f.read(),
+                                        file_name=f"allure-report-{selected_folder}.html",
+                                        mime="text/html"
+                                    )
+                            else:
+                                st.error("Report generated but HTML file not found")
+                    else:
+                        st.error("Report directory not found")
                 else:
                     st.error(f"Failed to generate report: {output}")
             
