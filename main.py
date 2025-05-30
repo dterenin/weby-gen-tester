@@ -273,35 +273,8 @@ if allure_path.exists():
                 cmd = f"allure generate --single-file allure-results/{selected_folder} -o allure-report"
                 success, output = run_command_async(cmd)
                 if success:
-                    # Find generated report file and offer download
-                    report_dir = Path("allure-report")
-                    if report_dir.exists():
-                        # Look for HTML files in the report directory
-                        html_files = list(report_dir.glob("*.html"))
-                        if html_files:
-                            report_file = html_files[0]  # Take the first HTML file
-                            with open(report_file, "rb") as f:
-                                st.download_button(
-                                    label="⬇️ Download Report",
-                                    data=f.read(),
-                                    file_name=f"allure-report-{selected_folder}.html",
-                                    mime="text/html"
-                                )
-                        else:
-                            # Fallback: try index.html
-                            report_file = report_dir / "index.html"
-                            if report_file.exists():
-                                with open(report_file, "rb") as f:
-                                    st.download_button(
-                                        label="⬇️ Download Report",
-                                        data=f.read(),
-                                        file_name=f"allure-report-{selected_folder}.html",
-                                        mime="text/html"
-                                    )
-                            else:
-                                st.error("Report generated but HTML file not found")
-                    else:
-                        st.error("Report directory not found")
+                    st.success("Allure report generation started!")
+                    st.info("Check the command output below. When completed, refresh the page to see download options.")
                 else:
                     st.error(f"Failed to generate report: {output}")
             
@@ -309,18 +282,66 @@ if allure_path.exists():
                 cmd = f"python extract_build_errors.py allure-results/{selected_folder}"
                 success, output = run_command_async(cmd)
                 if success:
-                    # Find generated errors file and offer download
-                    errors_file = Path(f"build_errors_{selected_folder}.txt")
-                    if errors_file.exists():
-                        with open(errors_file, "rb") as f:
-                            st.download_button(
-                                label="⬇️ Download Errors",
-                                data=f.read(),
-                                file_name=f"build_errors_{selected_folder}.txt",
-                                mime="text/plain"
-                            )
+                    st.success("Build error extraction started!")
+                    st.info("Check the command output below. When completed, refresh the page to see download options.")
                 else:
                     st.error(f"Failed to extract errors: {output}")
+        
+        # Separate section for downloads (always visible)
+        st.subheader("📥 Available Downloads")
+        
+        # Check for existing Allure reports
+        report_dir = Path("allure-report")
+        if report_dir.exists():
+            html_files = list(report_dir.glob("*.html"))
+            if html_files:
+                report_file = html_files[0]
+                with open(report_file, "rb") as f:
+                    st.download_button(
+                        label="⬇️ Download Allure Report",
+                        data=f.read(),
+                        file_name=f"allure-report-{selected_folder}.html",
+                        mime="text/html",
+                        key=f"download_report_{selected_folder}"
+                    )
+            elif (report_dir / "index.html").exists():
+                with open(report_dir / "index.html", "rb") as f:
+                    st.download_button(
+                        label="⬇️ Download Allure Report",
+                        data=f.read(),
+                        file_name=f"allure-report-{selected_folder}.html",
+                        mime="text/html",
+                        key=f"download_report_index_{selected_folder}"
+                    )
+        
+        # Check for existing error files
+        errors_file = Path(f"build_errors_{selected_folder}.txt")
+        if errors_file.exists():
+            with open(errors_file, "rb") as f:
+                st.download_button(
+                    label="⬇️ Download Build Errors",
+                    data=f.read(),
+                    file_name=f"build_errors_{selected_folder}.txt",
+                    mime="text/plain",
+                    key=f"download_errors_{selected_folder}"
+                )
+        
+        # Show available files for debugging
+        with st.expander("🔍 Debug: Available Files"):
+            st.write("**Allure report directory:**")
+            if report_dir.exists():
+                for file in report_dir.iterdir():
+                    st.text(f"  - {file.name}")
+            else:
+                st.text("  Directory not found")
+            
+            st.write("**Error files:**")
+            error_files = list(Path(".").glob("build_errors_*.txt"))
+            if error_files:
+                for file in error_files:
+                    st.text(f"  - {file.name}")
+            else:
+                st.text("  No error files found")
     else:
         st.info("No result folders found in allure-results")
 else:
