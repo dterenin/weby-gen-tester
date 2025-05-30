@@ -9,6 +9,8 @@ import json
 import queue
 from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
+import shlex
+import logging
 
 # Configure Streamlit page
 st.set_page_config(
@@ -48,26 +50,67 @@ def stream_output(process, output_queue):
     finally:
         output_queue.put(('done', process.returncode))
 
+def validate_command(command):
+    """Validate and sanitize command input"""
+    # Whitelist of allowed commands
+    allowed_commands = [
+        'ls', 'cat', 'grep', 'find', 'python', 'pytest', 'allure', 
+        'npm', 'node', 'git', 'docker', 'pip'
+    ]
+    
+    # Parse command safely
+    try:
+        parts = shlex.split(command)
+        if not parts:
+            return False, "Empty command"
+        
+        base_command = parts[0]
+        if base_command not in allowed_commands:
+            return False, f"Command '{base_command}' not allowed"
+        
+        # Additional validation for dangerous patterns
+        dangerous_patterns = ['&&', '||', ';', '|', '>', '<', '`', '$(']
+        for pattern in dangerous_patterns:
+            if pattern in command:
+                return False, f"Dangerous pattern '{pattern}' detected"
+        
+        return True, "Command validated"
+    except ValueError as e:
+        return False, f"Invalid command syntax: {e}"
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('streamlit_audit.log'),
+        logging.StreamHandler()
+    ]
+)
+
 def run_command_async(command):
-    """Run command asynchronously with real-time output"""
+    # Log all command executions
+    logging.info(f"Command executed: {command}")
+    """Run command asynchronously with validation"""
+    # Validate command first
+    is_valid, message = validate_command(command)
+    if not is_valid:
+        return False, f"Security validation failed: {message}"
+    
     try:
         st.session_state.test_running = True
         st.session_state.live_output = f"Starting command: {command}\n"
         
-        # Add to history
-        st.session_state.command_history.append({
-            'command': command,
-            'timestamp': datetime.now().isoformat(),
-            'status': 'running'
-        })
+        # Use shlex.split for safer command parsing
+        cmd_parts = shlex.split(command)
         
-        # Start process
+        # Start process WITHOUT shell=True for better security
         process = subprocess.Popen(
-            command,
+            cmd_parts,  # Use list instead of string
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            shell=True,
+            # shell=False  # Remove shell=True
             bufsize=1,
             universal_newlines=True
         )
@@ -133,18 +176,24 @@ def update_live_output():
     return updated
 
 def stop_current_command():
-    """Stop currently running command"""
+    """Improved process termination"""
     if st.session_state.current_process:
         try:
+            # Try graceful termination first
             st.session_state.current_process.terminate()
+            
+            # Wait for process to terminate
+            try:
+                st.session_state.current_process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                # Force kill if graceful termination fails
+                st.session_state.current_process.kill()
+                st.session_state.current_process.wait()
+            
             st.session_state.live_output += "\n[STOPPED] Command terminated by user\n"
             st.session_state.test_running = False
             st.session_state.current_process = None
             
-            # Update history
-            if st.session_state.command_history:
-                st.session_state.command_history[-1]['status'] = 'stopped'
-                
         except Exception as e:
             st.session_state.live_output += f"\n[ERROR] Failed to stop command: {str(e)}\n"
 
@@ -169,54 +218,43 @@ with st.sidebar:
                 'stopped': '⏹️'
             }.get(cmd['status'], '❓')
             
-            st.text(f"'✅'  {cmd['command'][:30]}...")
+            st.text(f"✅  {cmd['command'][:30]}...")
     else:
         st.text("No commands yet")
 
 # Custom command section
 st.header("💻 Custom Command")
-col1, col2, col3 = st.columns([3, 1, 1])
 
-def execute_command():
-    """Execute command when Enter is pressed"""
-    if st.session_state.custom_command_input and st.session_state.custom_command_input.strip():
+# Use form to enable Enter key submission
+with st.form(key="command_form", clear_on_submit=False):
+    col1, col2 = st.columns([4, 1])
+    
+    with col1:
+        custom_command = st.text_input(
+            "Enter any shell command:", 
+            value="ls -la",
+            placeholder="Enter command here...",
+            disabled=st.session_state.test_running,
+            key="custom_command_input"
+        )
+    
+    with col2:
+        st.write("")
+        st.write("")
+        submit_button = st.form_submit_button(
+            "▶️ Run Command", 
+            type="primary", 
+            disabled=st.session_state.test_running
+        )
+    
+    # Execute command when form is submitted (Enter or button click)
+    if submit_button and custom_command.strip():
         if not st.session_state.test_running:
-            success, output = run_command_async(st.session_state.custom_command_input)
-            if success:
-                st.success(f"Command executed: {st.session_state.custom_command_input}")
-            else:
-                st.error(f"Command failed: {output}")
-
-with col1:
-    custom_command = st.text_input(
-        "Enter any shell command:", 
-        value="ls -la",
-        placeholder="Enter command here...",
-        disabled=st.session_state.test_running,
-        key="custom_command_input",
-        on_change=execute_command
-    )
-
-with col2:
-    st.write("")
-    st.write("")
-    if st.button("▶️ Run Command", type="primary", disabled=st.session_state.test_running):
-        if custom_command.strip():
             success, output = run_command_async(custom_command)
             if success:
-                st.success("Custom command started")
+                st.success(f"Command executed: {custom_command}")
             else:
-                st.error("Custom command failed to start")
-            st.rerun()
-        else:
-            st.warning("Please enter a command")
-
-with col3:
-    st.write("")
-    st.write("")
-    if st.button("⏹️ Stop", disabled=not st.session_state.test_running):
-        stop_current_command()
-        st.rerun()
+                st.error(f"Command failed: {output}")
 
 # Allure Results Quick Actions
 st.header("📋 Allure Results")
@@ -324,7 +362,7 @@ if st.session_state.test_running:
 
 # Footer
 st.markdown("---")
-st.markdown("**Allure ")
+st.markdown("**weby-gen-tester** - Powered by Streamlit")
 
 # Auto-refresh during command execution
 if st.session_state.test_running:
