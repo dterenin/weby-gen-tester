@@ -270,7 +270,8 @@ if allure_path.exists():
         with col2:
             st.write("")
             if st.button("📊 Generate Allure Report"):
-                cmd = f"allure generate --single-file allure-results/{selected_folder} -o allure-report"
+                # Исправлено: используем правильный путь к результатам
+                cmd = f"allure generate allure-results/{selected_folder} -o allure-report --single-file --clean"
                 success, output = run_command_async(cmd)
                 if success:
                     st.success("Allure report generation started!")
@@ -315,11 +316,25 @@ if allure_path.exists():
                     )
         
         # Check for existing error files
+        # Исправлено: ищем правильный файл с ошибками
+        # Сначала проверяем общий файл build_errors_summary.txt
+        summary_file = Path("build_errors_summary.txt")
+        if summary_file.exists():
+            with open(summary_file, "rb") as f:
+                st.download_button(
+                    label="⬇️ Download Build Errors Summary",
+                    data=f.read(),
+                    file_name="build_errors_summary.txt",
+                    mime="text/plain",
+                    key="download_errors_summary"
+                )
+        
+        # Также проверяем файл с именем папки (если он существует)
         errors_file = Path(f"build_errors_{selected_folder}.txt")
         if errors_file.exists():
             with open(errors_file, "rb") as f:
                 st.download_button(
-                    label="⬇️ Download Build Errors",
+                    label=f"⬇️ Download Build Errors ({selected_folder})",
                     data=f.read(),
                     file_name=f"build_errors_{selected_folder}.txt",
                     mime="text/plain",
