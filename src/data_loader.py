@@ -4,11 +4,25 @@ from datasets import load_dataset
 import pandas as pd
 from opentelemetry import trace # For trace.get_current_span() and trace.Status
 from src.tracing import get_opentelemetry_tracer
+from huggingface_hub import login
 
 tracer = get_opentelemetry_tracer(__name__)
 
 cache_dir = "cache"
 os.makedirs(cache_dir, exist_ok=True)
+
+# Initialize Hugging Face authentication
+def init_huggingface_auth():
+    """Initialize Hugging Face authentication using token from environment"""
+    hf_token = os.getenv('HF_TOKEN')
+    if hf_token:
+        try:
+            login(token=hf_token)
+            print("Successfully authenticated with Hugging Face")
+        except Exception as e:
+            print(f"Failed to authenticate with Hugging Face: {e}")
+    else:
+        print("Warning: HF_TOKEN not found in environment variables")
 
 def get_cached_dataset(dataset_name, seed, limit):
     """Retrieve cached dataset if available"""
@@ -41,6 +55,9 @@ def download_and_process_dataset(dataset_name: str, seed=None, limit=None):
     and applies optional seed and limit.
     Traced with OpenTelemetry.
     """
+    # Initialize HF authentication before loading dataset
+    init_huggingface_auth()
+    
     cached_dataset = get_cached_dataset(dataset_name, seed, limit)
     if cached_dataset is not None:
         current_span = trace.get_current_span()
@@ -52,7 +69,7 @@ def download_and_process_dataset(dataset_name: str, seed=None, limit=None):
     try:
         # Load the dataset (will download if not cached)
         # The dataset viewer on Hugging Face shows a 'train' split.
-        dataset = load_dataset(dataset_name, split='train') # Use the argument here
+        dataset = load_dataset(dataset_name, split='train', use_auth_token=True) # Use the argument here
         span.set_attribute("dataset_name", dataset_name) # And here for tracing
         span.set_attribute("num_rows_original", len(dataset))
         print(f"Successfully loaded dataset: {dataset_name} with {len(dataset)} rows.")
@@ -113,4 +130,4 @@ if __name__ == '__main__':
     limited_questions_df = download_and_process_dataset(dataset_name=example_dataset_name, seed=42, limit=5)
     print(f"Retrieved {len(limited_questions_df)} questions.")
     for i, q in enumerate(limited_questions_df['question']):
-        print(f"{i+1}. {q}") 
+        print(f"{i+1}. {q}")
