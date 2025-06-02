@@ -575,20 +575,20 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
         print(f"[{time.strftime('%H:%M:%S')}] Error writing one or more LLM files for {site_identifier}. Aborting build process.")
         return results # Stop if LLM files couldn't be written
 
-    #stage_name_auto_fix = "Auto Import Fix"
-    #results["project_setup_stages"].append(stage_name_auto_fix)
+    stage_name_auto_fix = "Auto Import Fix"
+    results["project_setup_stages"].append(stage_name_auto_fix)
 
-    #auto_import_script = os.path.join(os.path.dirname(__file__), "auto_fix_imports.py")
-    #auto_fix_cmd = [sys.executable, auto_import_script, os.path.join(project_final_path, "src")]
+    auto_import_script = os.path.join(os.path.dirname(__file__), "auto_fix_imports.py")
+    auto_fix_cmd = [sys.executable, auto_import_script, os.path.join(project_final_path, "src")]
 
-    #auto_fix_success = _run_command_util(
-    #    auto_fix_cmd,
-    #    cwd=project_final_path,
-    #    results_dict=results,
-    #    timeout=120,
-    #    command_name=stage_name_auto_fix
-    #)
-    #results["auto_fix_success"] = auto_fix_success
+    auto_fix_success = _run_command_util(
+        auto_fix_cmd,
+        cwd=project_final_path,
+        results_dict=results,
+        timeout=120,
+        command_name=stage_name_auto_fix
+    )
+    results["auto_fix_success"] = auto_fix_success
 
     # Add
     external_pkgs = set()
