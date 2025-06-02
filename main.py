@@ -36,15 +36,47 @@ if 'output_queue' not in st.session_state:
 if 'current_process' not in st.session_state:
     st.session_state.current_process = None
 
+import threading
+import select
+import sys
+
 def stream_output(process, output_queue):
-    """Stream output from process to queue"""
+    """Stream output from process to queue with real-time handling"""
     try:
-        for line in iter(process.stdout.readline, ''):
-            if line:
-                output_queue.put(('stdout', line))
-        for line in iter(process.stderr.readline, ''):
-            if line:
-                output_queue.put(('stderr', line))
+        # Use threading to handle stdout and stderr simultaneously
+        def read_stdout():
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    if line:
+                        output_queue.put(('stdout', line))
+            except Exception as e:
+                output_queue.put(('error', f'stdout error: {str(e)}'))
+        
+        def read_stderr():
+            try:
+                for line in iter(process.stderr.readline, ''):
+                    if line:
+                        output_queue.put(('stderr', line))
+            except Exception as e:
+                output_queue.put(('error', f'stderr error: {str(e)}'))
+        
+        # Start both threads
+        stdout_thread = threading.Thread(target=read_stdout)
+        stderr_thread = threading.Thread(target=read_stderr)
+        
+        stdout_thread.daemon = True
+        stderr_thread.daemon = True
+        
+        stdout_thread.start()
+        stderr_thread.start()
+        
+        # Wait for process to complete
+        process.wait()
+        
+        # Wait for threads to finish
+        stdout_thread.join(timeout=1)
+        stderr_thread.join(timeout=1)
+        
     except Exception as e:
         output_queue.put(('error', str(e)))
     finally:
@@ -101,17 +133,23 @@ def run_command_async(command):
         st.session_state.test_running = True
         st.session_state.live_output = f"Starting command: {command}\n"
         
+        # Add command to history
+        st.session_state.command_history.append({
+            'command': command,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'running'
+        })
+        
         # Use shlex.split for safer command parsing
         cmd_parts = shlex.split(command)
         
         # Start process WITHOUT shell=True for better security
         process = subprocess.Popen(
-            cmd_parts,  # Use list instead of string
+            cmd_parts,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            # shell=False  # Remove shell=True
-            bufsize=1,
+            bufsize=0,  # Unbuffered for real-time output
             universal_newlines=True
         )
         
@@ -375,31 +413,26 @@ else:
 
 # Live Output section
 st.header("📄 Live Command Output")
-if st.session_state.test_running and st.session_state.live_output:
-    # Create a container for live output
-    output_container = st.container()
-    with output_container:
-        st.code(st.session_state.live_output, language="bash")
-        
-    # Auto-scroll to bottom (simulate)
-    if st.session_state.test_running:
-        time.sleep(0.5)
-        st.rerun()
+if st.session_state.test_running:
+    # Always call update_live_output when running
+    update_live_output()
+    
+    if st.session_state.live_output:
+        # Create a container for live output
+        output_container = st.container()
+        with output_container:
+            st.code(st.session_state.live_output, language="bash")
+    else:
+        st.info("Command is running, waiting for output...")
         
 elif st.session_state.last_output:
     st.code(st.session_state.last_output, language="bash")
 else:
     st.info("No output yet. Run a command to see results.")
 
-# Auto-refresh for live updates
-if st.session_state.test_running:
-    time.sleep(1)
-    st.rerun()
-
 # Footer
 st.markdown("---")
 st.markdown("**weby-gen-tester** - Powered by Streamlit")
 
-# Auto-refresh during command execution
 if st.session_state.test_running:
     st_autorefresh(interval=500, key="live_update")
