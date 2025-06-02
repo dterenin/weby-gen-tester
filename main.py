@@ -211,7 +211,7 @@ def update_live_output():
         except queue.Empty:
             break
     
-    return updated
+    return updated  # Remove the st.rerun() call from here
 
 def stop_current_command():
     """Improved process termination"""
@@ -405,16 +405,15 @@ st.header("📊 Status & Output")
 
 if st.session_state.test_running:
     st.warning("🔄 Command is running...")
-    # Update live output
-    if update_live_output():
-        st.rerun()
+    # Update live output but don't trigger rerun here
+    update_live_output()
 else:
     st.success("✅ Ready for commands")
 
 # Live Output section
 st.header("📄 Live Command Output")
 if st.session_state.test_running:
-    # Always call update_live_output when running
+    # Update live output without triggering rerun
     update_live_output()
     
     if st.session_state.live_output:
@@ -434,5 +433,6 @@ else:
 st.markdown("---")
 st.markdown("**weby-gen-tester** - Powered by Streamlit")
 
+# Use ONLY st_autorefresh for updates, remove manual st.rerun() calls
 if st.session_state.test_running:
-    st_autorefresh(interval=500, key="live_update")
+    st_autorefresh(interval=1000, key="live_update")  # Increased interval to reduce conflicts
