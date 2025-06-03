@@ -557,38 +557,70 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
         tesslate_response_content = re.sub(old_pattern, new_string, tesslate_response_content, flags=re.DOTALL)
     if original_llm_content_for_fixes != tesslate_response_content:
         results["llm_syntax_fixes_applied"] += 1
-    
+
     edit_blocks = re.findall(r'<Edit filename="(.*?)">([\s\S]*?)<\/Edit>', tesslate_response_content)
     if edit_blocks:
+        # Initialize auto fix tracking
+        auto_fix_script = os.path.join(os.path.dirname(__file__), "auto_fix_imports.py")
+        auto_fix_results = []
+
         for filename, code_content in edit_blocks:
             filename = filename.replace('\\"', '"').strip()
             code_content_unescaped = code_content.replace(r'<', '<').replace(r'>', '>').replace(r'&', '&')
             code_content_unescaped = code_content_unescaped.replace(r'\"', '"').replace(r"\'", "'").replace(r'\\', '\\')
             target_path = os.path.normpath(os.path.join(project_final_path, filename))
+
             if not target_path.startswith(os.path.abspath(project_final_path)):
                 results["error_messages"].append(f"Security risk: LLM write attempt outside project: {filename}")
-                results["llm_files_write_success"] = False; continue
+                results["llm_files_write_success"] = False
+                continue
+
+            # Write the file
             _create_file_with_content(target_path, code_content_unescaped, results, f"AI-generated file: {filename}")
+
+            # Check if file write was successful
             if any(err_msg.startswith(f"Error creating/writing file AI-generated file: {filename}") for err_msg in results.get("error_messages", [])):
-                 results["llm_files_write_success"] = False
+                results["llm_files_write_success"] = False
+                continue
+
+            # Apply auto fix to this specific file
+            stage_name_auto_fix = f"Auto Import Fix: {filename}"
+            if "project_setup_stages" not in results:
+                results["project_setup_stages"] = []
+            results["project_setup_stages"].append(stage_name_auto_fix)
+
+            auto_fix_cmd = [sys.executable, auto_fix_script, target_path]
+
+            auto_fix_success = _run_command_util(
+                auto_fix_cmd,
+                cwd=project_final_path,
+                results_dict=results,
+                timeout=120,
+                command_name=stage_name_auto_fix
+            )
+
+            auto_fix_results.append({
+                "filename": filename,
+                "success": auto_fix_success
+            })
+
+            # Log individual file auto fix result
+            if auto_fix_success:
+                print(f"[{time.strftime('%H:%M:%S')}] Auto fix completed successfully for {filename}")
+            else:
+                print(f"[{time.strftime('%H:%M:%S')}] Auto fix failed for {filename}")
+
+        # Set overall auto fix success based on all individual results
+        results["auto_fix_success"] = all(result["success"] for result in auto_fix_results)
+        results["auto_fix_results"] = auto_fix_results
+
+        if not results["auto_fix_success"]:
+            failed_files = [result["filename"] for result in auto_fix_results if not result["success"]]
+            results["error_messages"].append(f"Auto fix failed for files: {', '.join(failed_files)}")
+
     if not results["llm_files_write_success"]:
         print(f"[{time.strftime('%H:%M:%S')}] Error writing one or more LLM files for {site_identifier}. Aborting build process.")
-        return results # Stop if LLM files couldn't be written
-
-    stage_name_auto_fix = "Auto Import Fix"
-    results["project_setup_stages"].append(stage_name_auto_fix)
-
-    auto_import_script = os.path.join(os.path.dirname(__file__), "auto_fix_imports.py")
-    auto_fix_cmd = [sys.executable, auto_import_script, os.path.join(project_final_path, "src")]
-
-    auto_fix_success = _run_command_util(
-        auto_fix_cmd,
-        cwd=project_final_path,
-        results_dict=results,
-        timeout=120,
-        command_name=stage_name_auto_fix
-    )
-    results["auto_fix_success"] = auto_fix_success
+        return results  # Stop if LLM files couldn't be written
 
     # Add
     external_pkgs = set()
