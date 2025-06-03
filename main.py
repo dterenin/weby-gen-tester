@@ -11,6 +11,7 @@ from pathlib import Path
 from streamlit_autorefresh import st_autorefresh
 import shlex
 import logging
+import select
 
 # Configure Streamlit page
 st.set_page_config(
@@ -35,48 +36,50 @@ if 'output_queue' not in st.session_state:
     st.session_state.output_queue = queue.Queue()
 if 'current_process' not in st.session_state:
     st.session_state.current_process = None
+if 'active_threads' not in st.session_state:
+    st.session_state.active_threads = []
 
-import threading
-import select
-import sys
+def cleanup_threads():
+    """Clean up finished threads to prevent accumulation"""
+    if 'active_threads' in st.session_state:
+        active = []
+        for thread in st.session_state.active_threads:
+            if thread.is_alive():
+                active.append(thread)
+            else:
+                try:
+                    thread.join(timeout=0.1)
+                except:
+                    pass
+        st.session_state.active_threads = active
 
-def stream_output(process, output_queue):
-    """Stream output from process to queue with real-time handling"""
+def stream_output_simple(process, output_queue):
+    """Simplified single-thread output streaming"""
     try:
-        # Use threading to handle stdout and stderr simultaneously
-        def read_stdout():
-            try:
-                for line in iter(process.stdout.readline, ''):
-                    if line:
-                        output_queue.put(('stdout', line))
-            except Exception as e:
-                output_queue.put(('error', f'stdout error: {str(e)}'))
+        # Use select for non-blocking I/O (Unix-like systems)
+        import select
         
-        def read_stderr():
-            try:
-                for line in iter(process.stderr.readline, ''):
-                    if line:
-                        output_queue.put(('stderr', line))
-            except Exception as e:
-                output_queue.put(('error', f'stderr error: {str(e)}'))
+        while process.poll() is None:
+            # Check if there's data to read
+            ready, _, _ = select.select([process.stdout, process.stderr], [], [], 0.1)
+            
+            for stream in ready:
+                line = stream.readline()
+                if line:
+                    stream_type = 'stdout' if stream == process.stdout else 'stderr'
+                    output_queue.put((stream_type, line))
+            
+            time.sleep(0.01)  # Small delay to prevent CPU spinning
         
-        # Start both threads
-        stdout_thread = threading.Thread(target=read_stdout)
-        stderr_thread = threading.Thread(target=read_stderr)
+        # Read any remaining output
+        for line in process.stdout:
+            if line:
+                output_queue.put(('stdout', line))
         
-        stdout_thread.daemon = True
-        stderr_thread.daemon = True
-        
-        stdout_thread.start()
-        stderr_thread.start()
-        
-        # Wait for process to complete
-        process.wait()
-        
-        # Wait for threads to finish
-        stdout_thread.join(timeout=1)
-        stderr_thread.join(timeout=1)
-        
+        for line in process.stderr:
+            if line:
+                output_queue.put(('stderr', line))
+                
     except Exception as e:
         output_queue.put(('error', str(e)))
     finally:
@@ -87,7 +90,7 @@ def validate_command(command):
     # Whitelist of allowed commands
     allowed_commands = [
         'ls', 'cat', 'grep', 'find', 'python', 'pytest', 'allure', 
-        'npm', 'node', 'git', 'docker', 'pip'
+        'npm', 'node', 'git', 'docker', 'pip', 'npx'
     ]
     
     # Parse command safely
@@ -121,13 +124,21 @@ logging.basicConfig(
 )
 
 def run_command_async(command):
+    """Run command asynchronously with improved thread management"""
+    # Clean up old threads first
+    cleanup_threads()
+    
     # Log all command executions
     logging.info(f"Command executed: {command}")
-    """Run command asynchronously with validation"""
+    
     # Validate command first
     is_valid, message = validate_command(command)
     if not is_valid:
         return False, f"Security validation failed: {message}"
+    
+    # Check if we have too many active threads
+    if len(st.session_state.active_threads) > 5:
+        return False, "Too many active commands. Please wait for some to complete."
     
     try:
         st.session_state.test_running = True
@@ -149,19 +160,20 @@ def run_command_async(command):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            bufsize=0,  # Unbuffered for real-time output
+            bufsize=1,  # Line buffered
             universal_newlines=True
         )
         
         st.session_state.current_process = process
         
-        # Start output streaming thread
+        # Start single output streaming thread
         output_thread = threading.Thread(
-            target=stream_output, 
-            args=(process, st.session_state.output_queue)
+            target=stream_output_simple, 
+            args=(process, st.session_state.output_queue),
+            daemon=True
         )
-        output_thread.daemon = True
         output_thread.start()
+        st.session_state.active_threads.append(output_thread)
         
         return True, "Command started successfully"
         
@@ -172,9 +184,12 @@ def run_command_async(command):
         return False, error_msg
 
 def update_live_output():
-    """Update live output from queue"""
+    """Update live output from queue without triggering reruns"""
     updated = False
-    while not st.session_state.output_queue.empty():
+    max_updates = 10  # Limit updates per call to prevent overwhelming
+    updates_count = 0
+    
+    while not st.session_state.output_queue.empty() and updates_count < max_updates:
         try:
             msg_type, content = st.session_state.output_queue.get_nowait()
             
@@ -208,10 +223,12 @@ def update_live_output():
                 st.session_state.current_process = None
                 updated = True
                 
+            updates_count += 1
+                
         except queue.Empty:
             break
     
-    return updated  # Remove the st.rerun() call from here
+    return updated
 
 def stop_current_command():
     """Improved process termination"""
@@ -239,11 +256,18 @@ def stop_current_command():
 with st.sidebar:
     st.header("📊 System Info")
     st.info(f"**Working Dir:** {os.getcwd()}")
+    st.info(f"**Active Threads:** {len(st.session_state.active_threads)}")
     st.info(f"**Phoenix Traces:** [View Traces](https://arize-phoenix-production-a0af.up.railway.app/projects/UHJvamVjdDox/traces)")
     st.info(f"**Service Deployment:** [Restart Service](https://railway.com/project/d0a9c47a-4057-4091-b7c8-b7b175b5535d/service/281fa7de-4b73-4b81-b920-7d6b7ceb0d29?environmentId=6b0b0aa3-4d15-4569-998f-3f059c2240c1)")
     st.info(f"**Service Source:** [GitHub](https://github.com/dterenin/weby-gen-tester/tree/railway)")
+    
     if st.button("🔄 Refresh"):
+        cleanup_threads()
         st.rerun()
+    
+    if st.button("🧹 Cleanup Threads"):
+        cleanup_threads()
+        st.success(f"Cleaned up threads. Active: {len(st.session_state.active_threads)}")
     
     # Command history
     st.header("📜 Command History")
@@ -251,12 +275,12 @@ with st.sidebar:
         for i, cmd in enumerate(reversed(st.session_state.command_history[-5:])):
             status_emoji = {
                 'running': '🔄',
-                'completed': '✅' if cmd.get('returncode', 0) == 0 else '✅',
+                'completed': '✅' if cmd.get('returncode', 0) == 0 else '❌',
                 'error': '💥',
                 'stopped': '⏹️'
             }.get(cmd['status'], '❓')
             
-            st.text(f"✅  {cmd['command'][:30]}...")
+            st.text(f"{status_emoji} {cmd['command'][:30]}...")
     else:
         st.text("No commands yet")
 
@@ -294,118 +318,11 @@ with st.form(key="command_form", clear_on_submit=False):
             else:
                 st.error(f"Command failed: {output}")
 
-# Allure Results Quick Actions
-st.header("📋 Allure Results")
-allure_path = Path("allure-results")
-if allure_path.exists():
-    result_folders = [f.name for f in allure_path.iterdir() if f.is_dir()]
-    if result_folders:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            selected_folder = st.selectbox("Select results folder:", result_folders)
-            
-        with col2:
-            st.write("")
-            if st.button("📊 Generate Allure Report"):
-                # Исправлено: используем правильный путь к результатам
-                cmd = f"allure generate allure-results/{selected_folder} -o allure-report --single-file --clean"
-                success, output = run_command_async(cmd)
-                if success:
-                    st.success("Allure report generation started!")
-                    st.info("Check the command output below. When completed, refresh the page to see download options.")
-                else:
-                    st.error(f"Failed to generate report: {output}")
-            
-            if st.button("🔍 Extract Build Errors"):
-                cmd = f"python extract_build_errors.py allure-results/{selected_folder}"
-                success, output = run_command_async(cmd)
-                if success:
-                    st.success("Build error extraction started!")
-                    st.info("Check the command output below. When completed, refresh the page to see download options.")
-                else:
-                    st.error(f"Failed to extract errors: {output}")
-        
-        # Separate section for downloads (always visible)
-        st.subheader("📥 Available Downloads")
-        
-        # Check for existing Allure reports
-        report_dir = Path("allure-report")
-        if report_dir.exists():
-            html_files = list(report_dir.glob("*.html"))
-            if html_files:
-                report_file = html_files[0]
-                with open(report_file, "rb") as f:
-                    st.download_button(
-                        label="⬇️ Download Allure Report",
-                        data=f.read(),
-                        file_name=f"allure-report-{selected_folder}.html",
-                        mime="text/html",
-                        key=f"download_report_{selected_folder}"
-                    )
-            elif (report_dir / "index.html").exists():
-                with open(report_dir / "index.html", "rb") as f:
-                    st.download_button(
-                        label="⬇️ Download Allure Report",
-                        data=f.read(),
-                        file_name=f"allure-report-{selected_folder}.html",
-                        mime="text/html",
-                        key=f"download_report_index_{selected_folder}"
-                    )
-        
-        # Check for existing error files
-        # Исправлено: ищем правильный файл с ошибками
-        # Сначала проверяем общий файл build_errors_summary.txt
-        summary_file = Path("build_errors_summary.txt")
-        if summary_file.exists():
-            with open(summary_file, "rb") as f:
-                st.download_button(
-                    label="⬇️ Download Build Errors Summary",
-                    data=f.read(),
-                    file_name="build_errors_summary.txt",
-                    mime="text/plain",
-                    key="download_errors_summary"
-                )
-        
-        # Также проверяем файл с именем папки (если он существует)
-        errors_file = Path(f"build_errors_{selected_folder}.txt")
-        if errors_file.exists():
-            with open(errors_file, "rb") as f:
-                st.download_button(
-                    label=f"⬇️ Download Build Errors ({selected_folder})",
-                    data=f.read(),
-                    file_name=f"build_errors_{selected_folder}.txt",
-                    mime="text/plain",
-                    key=f"download_errors_{selected_folder}"
-                )
-        
-        # Show available files for debugging
-        with st.expander("🔍 Debug: Available Files"):
-            st.write("**Allure report directory:**")
-            if report_dir.exists():
-                for file in report_dir.iterdir():
-                    st.text(f"  - {file.name}")
-            else:
-                st.text("  Directory not found")
-            
-            st.write("**Error files:**")
-            error_files = list(Path(".").glob("build_errors_*.txt"))
-            if error_files:
-                for file in error_files:
-                    st.text(f"  - {file.name}")
-            else:
-                st.text("  No error files found")
-    else:
-        st.info("No result folders found in allure-results")
-else:
-    st.info("allure-results folder not found")
-
 # Status section
 st.header("📊 Status & Output")
 
 if st.session_state.test_running:
     st.warning("🔄 Command is running...")
-    # Update live output but don't trigger rerun here
     update_live_output()
 else:
     st.success("✅ Ready for commands")
@@ -413,14 +330,10 @@ else:
 # Live Output section
 st.header("📄 Live Command Output")
 if st.session_state.test_running:
-    # Update live output without triggering rerun
     update_live_output()
     
     if st.session_state.live_output:
-        # Create a container for live output
-        output_container = st.container()
-        with output_container:
-            st.code(st.session_state.live_output, language="bash")
+        st.code(st.session_state.live_output, language="bash")
     else:
         st.info("Command is running, waiting for output...")
         
@@ -433,6 +346,6 @@ else:
 st.markdown("---")
 st.markdown("**weby-gen-tester** - Powered by Streamlit")
 
-# Use ONLY st_autorefresh for updates, remove manual st.rerun() calls
+# Only use autorefresh when actually running commands
 if st.session_state.test_running:
-    st_autorefresh(interval=1000, key="live_update")  # Increased interval to reduce conflicts
+    st_autorefresh(interval=2000, key="live_update")  # Increased interval
