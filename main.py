@@ -130,6 +130,8 @@ def run_command_async(command):
         return False, f"Security validation failed: {message}"
     
     try:
+        # Clear previous output before starting new command
+        st.session_state.live_output = ""
         st.session_state.test_running = True
         st.session_state.live_output = f"Starting command: {command}\n"
         
@@ -190,7 +192,7 @@ def update_live_output():
             elif msg_type == 'done':
                 returncode = content
                 st.session_state.live_output += f"\n[COMPLETED] Return code: {returncode}\n"
-                st.session_state.test_running = False
+                st.session_state.test_running = False  # This should unblock the input
                 
                 # Update history
                 if st.session_state.command_history:
@@ -211,7 +213,7 @@ def update_live_output():
         except queue.Empty:
             break
     
-    return updated  # Remove the st.rerun() call from here
+    return updated
 
 def stop_current_command():
     """Improved process termination"""
@@ -264,13 +266,13 @@ with st.sidebar:
 st.header("💻 Custom Command")
 
 # Use form to enable Enter key submission
-with st.form(key="command_form", clear_on_submit=False):
+with st.form(key="command_form", clear_on_submit=True):  # Changed to True
     col1, col2 = st.columns([4, 1])
     
     with col1:
         custom_command = st.text_input(
             "Enter any shell command:", 
-            value="ls -la",
+            value="" if st.session_state.test_running else "ls -la",  # Clear when running
             placeholder="Enter command here...",
             disabled=st.session_state.test_running,
             key="custom_command_input"
@@ -291,6 +293,8 @@ with st.form(key="command_form", clear_on_submit=False):
             success, output = run_command_async(custom_command)
             if success:
                 st.success(f"Command executed: {custom_command}")
+                # Force a rerun to update the UI state
+                st.rerun()
             else:
                 st.error(f"Command failed: {output}")
 
