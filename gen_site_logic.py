@@ -1,4 +1,3 @@
-# gen_site_logic.py
 import os
 import re
 import subprocess
@@ -14,7 +13,6 @@ import sys
 NEXTJS_GITHUB_EXAMPLE_URL = "https://github.com/dterenin/weby-nextjs-template"
 
 # --- Helper Functions ( _create_file_with_content, _run_command_util ) ---
-# These functions remain unchanged from the previous version.
 def _create_file_with_content(filepath: str, content: str, results_dict: dict, file_description: str):
     """Helper function to create a file with given content."""
     try:
@@ -68,7 +66,7 @@ def _run_command_util(cmd_list_or_str, cwd, results_dict, timeout=120, check_on_
 
         if log_output_to_console:
             if stdout_val and stdout_val.strip(): print(f"[{time.strftime('%H:%M:%S')}] {command_name} STDOUT:\n{stdout_val.strip()}")
-            if stderr_val and stderr_val.strip(): print(f"[{time.strftime('%H:%M:%S')}] {command_name} STDERR:\n{stderr_val.strip()}")
+            if stderr_val and stderr_val.strip(): print(f"[{time.strftime('%H:%M:%S')}] {command_val} STDERR:\n{stderr_val.strip()}")
 
         if check_on_error and process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode, cmd_list_or_str, output=stdout_val, stderr=stderr_val)
@@ -113,8 +111,8 @@ def _run_command_util(cmd_list_or_str, cwd, results_dict, timeout=120, check_on_
 
 def setup_project_environment(base_tmp_dir: str, project_folder_name: str, results: dict) -> str | None:
     """
-    Creates a Next.js project using create-next-app from a specified GitHub example template.
-    The template is expected to have all base dependencies pre-configured.
+    Creates a Next.js project by cloning a specified GitHub example template
+    and installing its pre-configured dependencies.
     Returns the project path if successful, None otherwise.
     """
     project_path = os.path.join(base_tmp_dir, project_folder_name)
@@ -143,34 +141,44 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
 
     os.makedirs(base_tmp_dir, exist_ok=True)
 
-    stage_name_clone = "Clone Next App from GitHub Example"
+    stage_name_clone = "Clone Next.js Template from GitHub"
     results["project_setup_stages"].append(stage_name_clone)
     git_clone_cmd = ['git', 'clone', '--depth', '1', NEXTJS_GITHUB_EXAMPLE_URL, project_folder_name]
 
     clone_success = _run_command_util(
-    git_clone_cmd,
-    cwd=base_tmp_dir,
-    results_dict=results,
-    timeout=180,
-    command_name="Git Clone Template",
-    check_on_error=True
+        git_clone_cmd,
+        cwd=base_tmp_dir,
+        results_dict=results,
+        timeout=180,
+        command_name="Git Clone Template",
+        check_on_error=True
     )
-    results["cna_success"] = clone_success
+    results["cna_success"] = clone_success # Renamed from cna_success to reflect clone
     if not clone_success:
-        results["error_messages"].append(f"Failed to create project from example '{NEXTJS_GITHUB_EXAMPLE_URL}'. Check CNA logs.")
+        results["error_messages"].append(f"Failed to clone project from example '{NEXTJS_GITHUB_EXAMPLE_URL}'. Check git clone logs.")
         return None
     
     if not os.path.isdir(project_path):
-        results["error_messages"].append(f"Project directory '{project_path}' not found after create-next-app command.")
+        results["error_messages"].append(f"Project directory '{project_path}' not found after git clone command.")
         return None
     
+    # Remove .git directory after cloning to prevent issues if a new git repo needs to be initialized later
+    git_dir_path = os.path.join(project_path, ".git")
+    if os.path.exists(git_dir_path):
+        try:
+            shutil.rmtree(git_dir_path)
+            print(f"[{time.strftime('%H:%M:%S')}] Removed .git directory from cloned template.")
+        except Exception as e:
+            print(f"WARN: Could not remove .git directory: {e}")
+
+    # Stage: pnpm Install for Template Dependencies (This is the primary install)
     stage_name_pnpm_install = "pnpm Install (Template Dependencies)"
     results["project_setup_stages"].append(stage_name_pnpm_install)
     install_success = _run_command_util(
         ['pnpm', 'install', '--strict-peer-dependencies=false'],
         cwd=project_path,
         results_dict=results,
-        timeout=300, 
+        timeout=300, # Increased timeout for initial install
         command_name=stage_name_pnpm_install,
         check_on_error=True
     )
@@ -179,12 +187,16 @@ def setup_project_environment(base_tmp_dir: str, project_folder_name: str, resul
         results["error_messages"].append("pnpm install for template dependencies failed.")
         return None
 
+    # The steps for Shadcn Init and Shadcn Add Components are removed here,
+    # as the golden template is assumed to have them pre-configured.
+
+    # Check if components.json exists, as a sanity check for shadcn/ui setup in the template
     if not os.path.exists(os.path.join(project_path, "components.json")):
-        warn_msg = "Warning: components.json not found. Ensure your GitHub template includes a complete shadcn/ui setup."
+        warn_msg = "Warning: components.json not found in the cloned template. Ensure your GitHub template includes a complete shadcn/ui setup."
         print(f"[{time.strftime('%H:%M:%S')}] {warn_msg}")
         results["error_messages"].append(warn_msg)
     else:
-        print(f"[{time.strftime('%H:%M:%S')}] Found components.json, assuming shadcn/ui is configured in the template.")
+        print(f"[{time.strftime('%H:%M:%S')}] Found components.json in the cloned template, assuming shadcn/ui is configured.")
 
     print(f"[{time.strftime('%H:%M:%S')}] Project setup from GitHub example '{NEXTJS_GITHUB_EXAMPLE_URL}' completed at: {project_path}")
     return project_path
@@ -209,7 +221,7 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
         "error_messages": [],
         "command_outputs_map": {},
         "project_setup_stages": [],
-        "cna_success": False,
+        "cna_success": False, # Retained for compatibility, represents initial project clone success
         "pnpm_template_install_success": False,
         "llm_files_write_success": True,
         "pnpm_install_llm_deps_success": True,
@@ -237,10 +249,10 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
     stage_name_llm_apply = "Apply LLM Code (Syntax Fixes and File Writes)"
     results["project_setup_stages"].append(stage_name_llm_apply)
     replacements = [
-        (r'import\s+\{\s*([\w,\s]+)\s*\}\s*=\s*(".*?");', r'import { \1 } from \2;'),
-        (r'import\s+\*\s*as\s+(\w+)\s*=\s*(".*?");', r'import * as \1 from \2;'),
-        (r'import\s+\{\s*(?:useToast|toast)\s*(?:,\s*[^}]+)?\s*\}\s+from\s+["\']@/components/ui/use-toast["\'];?',
-         r'import { toast } from "sonner"; /* Patched: useToast from shadcn is for its Toaster, direct toast calls usually from sonner */'),
+       # (r'import\s+\{\s*([\w,\s]+)\s*\}\s*=\s*(".*?");', r'import { \1 } from \2;'),
+       # (r'import\s+\*\s*as\s+(\w+)\s*=\s*(".*?");', r'import * as \1 from \2;'),
+       # (r'import\s+\{\s*(?:useToast|toast)\s*(?:,\s*[^}]+)?\s*\}\s+from\s+["\']@/components/ui/use-toast["\'];?',
+       #  r'import { toast } from "sonner"; /* Patched: useToast from shadcn is for its Toaster, direct toast calls usually from sonner */'),
     ]
     original_llm_content_for_fixes = tesslate_response_content
     for old_pattern, new_string in replacements:
@@ -256,6 +268,76 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
         filename = filename.replace('\\"', '"').strip()
         code_content_unescaped = code_content.replace(r'<', '<').replace(r'>', '>').replace(r'&', '&')
         code_content_unescaped = code_content_unescaped.replace(r'\"', '"').replace(r"\'", "'").replace(r'\\', '\\')
+
+        # BEGIN: NEW - Strip Markdown code blocks if present
+        stripped_content = code_content_unescaped.strip()
+        if stripped_content.startswith('```') and stripped_content.endswith('```'):
+            lines = stripped_content.splitlines()
+            # Ensure there's a language specifier on the first fence and a closing fence
+            if len(lines) > 1 and lines[0].strip().startswith('```') and lines[-1].strip() == '```':
+                # Remove the first and last lines (code fences)
+                code_content_unescaped = "\n".join(lines[1:-1])
+                print(f"[{time.strftime('%H:%M:%S')}] Stripped Markdown code fences from {filename}.")
+                results["llm_syntax_fixes_applied"] = results.get("llm_syntax_fixes_applied", 0) + 1 # Count this as a fix
+        # END: NEW - Strip Markdown code blocks if present
+
+        # BEGIN: Automated "use client"; injection logic
+        client_indicators = [
+            r'useState\s*\(',
+            r'useEffect\s*\(',
+            r'useContext\s*\(',
+            r'useReducer\s*\(',
+            r'useRef\s*\(',
+            r'useCallback\s*\(',
+            r'useMemo\s*\(',
+            r'onClick\s*=',
+            r'onChange\s*=',
+            r'onSubmit\s*=',
+            r'onBlur\s*=',
+            r'onFocus\s*=',
+            r'window\.',
+            r'document\.',
+            r'localStorage\.',
+            r'sessionStorage\.',
+            r'navigator\.',
+            r'react-hot-toast',
+            r'sonner',
+            r'dnd-kit',
+            r'embla-carousel-react',
+            r'recharts',
+            r'cmdk',
+            r'input-otp',
+            r'react-day-picker',
+            r'react-hook-form',
+            r'next-themes',
+            r'vaul',
+            r'express',
+        ]
+
+        needs_use_client = False
+        if not code_content_unescaped.strip().startswith(('"use client";', "'use client';")):
+            for pattern in client_indicators:
+                if re.search(pattern, code_content_unescaped):
+                    needs_use_client = True
+                    break
+        
+        if needs_use_client:
+            print(f"[{time.strftime('%H:%M:%S')}] Auto-prepending '\"use client\";' to {filename} due to detected client indicators.")
+            code_content_unescaped = '"use client";\n' + code_content_unescaped
+            results["llm_syntax_fixes_applied"] = results.get("llm_syntax_fixes_applied", 0) + 1
+        # END: Automated "use client"; injection logic
+            
+        target_path = os.path.normpath(os.path.join(project_final_path, filename))
+        if not os.path.abspath(target_path).startswith(os.path.abspath(project_final_path)):
+            error_msg = f"Security risk: LLM tried to write to '{filename}' which resolves outside the project directory: '{target_path}'"
+            print(f"ERROR: {error_msg}")
+            results["error_messages"].append(error_msg)
+            results["llm_files_write_success"] = False; continue
+        _create_file_with_content(target_path, code_content_unescaped, results, f"AI-generated file: {filename}")
+        if any(err_msg.startswith(f"Error creating/writing file AI-generated file: {filename}") for err_msg in results.get("error_messages", [])):
+            results["llm_files_write_success"] = False
+        # END: Automated "use client"; injection logic
+            
         target_path = os.path.normpath(os.path.join(project_final_path, filename))
         if not os.path.abspath(target_path).startswith(os.path.abspath(project_final_path)):
             error_msg = f"Security risk: LLM tried to write to '{filename}' which resolves outside the project directory: '{target_path}'"
@@ -404,7 +486,7 @@ if __name__ == "__main__":
     }
     </Edit>
     """
-    temp_base_dir = os.path.join(os.getcwd(), "temp_generated_sites_git_url") # Changed dir name
+    temp_base_dir = os.path.join(os.getcwd(), "temp_generated_sites_git_url") # Changed dir name for clarity
     os.makedirs(temp_base_dir, exist_ok=True)
     
     site_id = f"llm_site_git_url_{int(time.time())}"
