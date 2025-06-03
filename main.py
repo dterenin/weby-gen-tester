@@ -192,7 +192,8 @@ def update_live_output():
             elif msg_type == 'done':
                 returncode = content
                 st.session_state.live_output += f"\n[COMPLETED] Return code: {returncode}\n"
-                st.session_state.test_running = False  # This should unblock the input
+                st.session_state.test_running = False
+                st.session_state.command_just_completed = False  # Reset completion flag
                 
                 # Update history
                 if st.session_state.command_history:
@@ -270,9 +271,10 @@ with st.form(key="command_form", clear_on_submit=True):  # Changed to True
     col1, col2 = st.columns([4, 1])
     
     with col1:
+        # Don't change value based on test_running state - let form handle it
         custom_command = st.text_input(
             "Enter any shell command:", 
-            value="" if st.session_state.test_running else "ls -la",  # Clear when running
+            value="ls -la",  # Keep static default value
             placeholder="Enter command here...",
             disabled=st.session_state.test_running,
             key="custom_command_input"
@@ -293,8 +295,7 @@ with st.form(key="command_form", clear_on_submit=True):  # Changed to True
             success, output = run_command_async(custom_command)
             if success:
                 st.success(f"Command executed: {custom_command}")
-                # Force a rerun to update the UI state
-                st.rerun()
+                # Remove st.rerun() here - let auto-refresh handle it
             else:
                 st.error(f"Command failed: {output}")
 
@@ -437,6 +438,20 @@ else:
 st.markdown("---")
 st.markdown("**weby-gen-tester** - Powered by Streamlit")
 
-# Use ONLY st_autorefresh for updates, remove manual st.rerun() calls
+# Improved auto-refresh logic
 if st.session_state.test_running:
-    st_autorefresh(interval=1000, key="live_update")  # Increased interval to reduce conflicts
+    # Only auto-refresh when command is actually running
+    st_autorefresh(interval=2000, key="live_update")  # Slower refresh
+else:
+    # Force one final refresh when command completes to unlock the form
+    if 'command_just_completed' not in st.session_state:
+        st.session_state.command_just_completed = False
+    
+    # Check if we just completed a command
+    if (st.session_state.current_process is None and 
+        st.session_state.command_history and 
+        st.session_state.command_history[-1].get('status') == 'completed' and
+        not st.session_state.command_just_completed):
+        
+        st.session_state.command_just_completed = True
+        st.rerun()  # One final rerun to unlock the form
