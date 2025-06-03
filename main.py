@@ -130,8 +130,7 @@ def run_command_async(command):
         return False, f"Security validation failed: {message}"
     
     try:
-        # Clear previous output before starting new command
-        st.session_state.live_output = ""
+        # CRITICAL: Set test_running to True FIRST
         st.session_state.test_running = True
         st.session_state.live_output = f"Starting command: {command}\n"
         
@@ -170,7 +169,7 @@ def run_command_async(command):
     except Exception as e:
         error_msg = f"Error starting command '{command}': {str(e)}"
         st.session_state.live_output = error_msg
-        st.session_state.test_running = False
+        st.session_state.test_running = False  # Reset on error
         return False, error_msg
 
 def update_live_output():
@@ -193,7 +192,7 @@ def update_live_output():
                 returncode = content
                 st.session_state.live_output += f"\n[COMPLETED] Return code: {returncode}\n"
                 
-                # CRITICAL: Reset all running states
+                # CRITICAL: Set test_running to False IMMEDIATELY
                 st.session_state.test_running = False
                 st.session_state.current_process = None
                 
@@ -407,11 +406,10 @@ else:
 # Status section
 st.header("📊 Status & Output")
 
-# Update live output FIRST, before checking status
-if st.session_state.test_running:
-    update_live_output()  # This may change test_running to False
+# Always update output first
+update_live_output()
 
-# Check status AFTER updating
+# Simple status check
 if st.session_state.test_running:
     st.warning("🔄 Command is running...")
 else:
@@ -434,7 +432,7 @@ else:
 st.markdown("---")
 st.markdown("**weby-gen-tester** - Powered by Streamlit")
 
-# Simple auto-refresh - only when running
+# Simple auto-refresh logic
 if st.session_state.test_running:
     st_autorefresh(interval=1000, key="live_update")
 else:
