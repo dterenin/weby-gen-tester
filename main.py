@@ -192,8 +192,10 @@ def update_live_output():
             elif msg_type == 'done':
                 returncode = content
                 st.session_state.live_output += f"\n[COMPLETED] Return code: {returncode}\n"
+                
+                # CRITICAL: Reset all running states
                 st.session_state.test_running = False
-                st.session_state.command_just_completed = False  # Reset completion flag
+                st.session_state.current_process = None
                 
                 # Update history
                 if st.session_state.command_history:
@@ -208,7 +210,6 @@ def update_live_output():
                 }
                 
                 st.session_state.last_output = st.session_state.live_output
-                st.session_state.current_process = None
                 updated = True
                 
         except queue.Empty:
@@ -267,16 +268,15 @@ with st.sidebar:
 st.header("💻 Custom Command")
 
 # Use form to enable Enter key submission
-with st.form(key="command_form", clear_on_submit=True):  # Changed to True
+with st.form(key="command_form", clear_on_submit=False):  # Keep False
     col1, col2 = st.columns([4, 1])
     
     with col1:
-        # Don't change value based on test_running state - let form handle it
         custom_command = st.text_input(
             "Enter any shell command:", 
-            value="ls -la",  # Keep static default value
+            value="ls -la",  # Static value
             placeholder="Enter command here...",
-            disabled=st.session_state.test_running,
+            disabled=st.session_state.test_running,  # SHOULD be disabled when running
             key="custom_command_input"
         )
     
@@ -295,7 +295,6 @@ with st.form(key="command_form", clear_on_submit=True):  # Changed to True
             success, output = run_command_async(custom_command)
             if success:
                 st.success(f"Command executed: {custom_command}")
-                # Remove st.rerun() here - let auto-refresh handle it
             else:
                 st.error(f"Command failed: {output}")
 
@@ -408,40 +407,36 @@ else:
 # Status section
 st.header("📊 Status & Output")
 
+# Update live output FIRST, before checking status
+if st.session_state.test_running:
+    update_live_output()  # This may change test_running to False
+
+# Check status AFTER updating
 if st.session_state.test_running:
     st.warning("🔄 Command is running...")
-    # Update live output but don't trigger rerun here
-    update_live_output()
 else:
     st.success("✅ Ready for commands")
 
 # Live Output section
 st.header("📄 Live Command Output")
 if st.session_state.test_running:
-    # Update live output without triggering rerun
-    update_live_output()
-    
     if st.session_state.live_output:
-        # Create a container for live output
-        output_container = st.container()
-        with output_container:
-            st.code(st.session_state.live_output, language="bash")
+        st.code(st.session_state.live_output, language="bash")
     else:
         st.info("Command is running, waiting for output...")
-        
-elif st.session_state.last_output:
-    st.code(st.session_state.last_output, language="bash")
 else:
-    st.info("No output yet. Run a command to see results.")
+    if st.session_state.last_output:
+        st.code(st.session_state.last_output, language="bash")
+    else:
+        st.info("No output yet. Run a command to see results.")
 
 # Footer
 st.markdown("---")
 st.markdown("**weby-gen-tester** - Powered by Streamlit")
 
-# Improved auto-refresh logic
+# Simple auto-refresh - only when running
 if st.session_state.test_running:
-    # Only auto-refresh when command is actually running
-    st_autorefresh(interval=2000, key="live_update")  # Slower refresh
+    st_autorefresh(interval=1000, key="live_update")
 else:
     # Force one final refresh when command completes to unlock the form
     if 'command_just_completed' not in st.session_state:
