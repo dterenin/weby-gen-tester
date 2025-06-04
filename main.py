@@ -192,9 +192,12 @@ def update_live_output():
                 returncode = content
                 st.session_state.live_output += f"\n[COMPLETED] Return code: {returncode}\n"
                 
-                # CRITICAL: Set test_running to False IMMEDIATELY
+                # CRITICAL: Reset state and force interface update
                 st.session_state.test_running = False
                 st.session_state.current_process = None
+                
+                # Force interface update
+                st.rerun()
                 
                 # Update history
                 if st.session_state.command_history:
@@ -239,6 +242,7 @@ def stop_current_command():
             st.session_state.live_output += f"\n[ERROR] Failed to stop command: {str(e)}\n"
 
 # Sidebar with system info
+# Add debug information to sidebar
 with st.sidebar:
     st.header("📊 System Info")
     st.info(f"**Working Dir:** {os.getcwd()}")
@@ -267,15 +271,19 @@ with st.sidebar:
 st.header("💻 Custom Command")
 
 # Use form to enable Enter key submission
-with st.form(key="command_form", clear_on_submit=False):  # Keep False
+# Add explicit state check in form section
+with st.form(key="command_form", clear_on_submit=False):
+    # Explicitly check state before displaying form
+    form_disabled = st.session_state.get('test_running', False)
+    
     col1, col2 = st.columns([4, 1])
     
     with col1:
         custom_command = st.text_input(
             "Enter any shell command:", 
-            value="ls -la",  # Static value
+            value="ls -la",
             placeholder="Enter command here...",
-            disabled=st.session_state.test_running,  # SHOULD be disabled when running
+            disabled=form_disabled,  # Use explicit variable
             key="custom_command_input"
         )
     
@@ -285,7 +293,7 @@ with st.form(key="command_form", clear_on_submit=False):  # Keep False
         submit_button = st.form_submit_button(
             "▶️ Run Command", 
             type="primary", 
-            disabled=st.session_state.test_running
+            disabled=form_disabled  # Use the same variable
         )
     
     # Execute command when form is submitted (Enter or button click)
@@ -311,7 +319,7 @@ if allure_path.exists():
         with col2:
             st.write("")
             if st.button("📊 Generate Allure Report"):
-                # Исправлено: используем правильный путь к результатам
+                # Fixed: use correct path to results
                 cmd = f"allure generate allure-results/{selected_folder} -o allure-report --single-file --clean"
                 success, output = run_command_async(cmd)
                 if success:
@@ -357,8 +365,8 @@ if allure_path.exists():
                     )
         
         # Check for existing error files
-        # Исправлено: ищем правильный файл с ошибками
-        # Сначала проверяем общий файл build_errors_summary.txt
+        # Fixed: search for correct error file
+        # First check general build_errors_summary.txt file
         summary_file = Path("build_errors_summary.txt")
         if summary_file.exists():
             with open(summary_file, "rb") as f:
@@ -370,7 +378,7 @@ if allure_path.exists():
                     key="download_errors_summary"
                 )
         
-        # Также проверяем файл с именем папки (если он существует)
+        # Also check file with folder name (if it exists)
         errors_file = Path(f"build_errors_{selected_folder}.txt")
         if errors_file.exists():
             with open(errors_file, "rb") as f:
