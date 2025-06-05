@@ -291,7 +291,7 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
                 results["project_setup_stages"] = []
             results["project_setup_stages"].append(stage_name_auto_fix)
 
-            auto_fix_cmd = [sys.executable, auto_fix_script, target_path]
+            auto_fix_cmd = [sys.executable, auto_fix_script, target_path, "lucide_icons.json"]
 
             auto_fix_success = _run_command_util(
                 auto_fix_cmd,
