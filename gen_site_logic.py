@@ -329,45 +329,6 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
     for _, code in edit_blocks:
         external_pkgs |= extract_external_packages(code)
 
-    if external_pkgs_from_llm:
-        print(f"[{time.strftime('%H:%M:%S')}] LLM code seems to use external packages: {external_pkgs_from_llm}")
-        pkg_json_path = os.path.join(project_final_path, "package.json")
-        newly_added_to_pkg_json = False
-        try:
-            with open(pkg_json_path, "r+", encoding='utf-8') as f:
-                pkg_data = json.load(f)
-                current_deps = pkg_data.setdefault("dependencies", {})
-                current_dev_deps = pkg_data.get("devDependencies", {}) 
-                if current_dev_deps is None: current_dev_deps = {}
-                
-                for pkg_name in external_pkgs_from_llm:
-                    if pkg_name not in current_deps and pkg_name not in current_dev_deps:
-                        print(f"[{time.strftime('%H:%M:%S')}] Adding new LLM-introduced package '{pkg_name}: latest' to package.json.")
-                        current_deps[pkg_name] = "latest"
-                        newly_added_to_pkg_json = True
-                
-                if newly_added_to_pkg_json:
-                    f.seek(0); json.dump(pkg_data, f, indent=2); f.truncate()
-        except Exception as e:
-            error_msg = f"Error updating package.json with LLM-extracted packages: {e}"
-            print(f"ERROR: {error_msg}")
-            results["error_messages"].append(error_msg)
-            results["pnpm_install_llm_deps_success"] = False
-
-        if newly_added_to_pkg_json and results["pnpm_install_llm_deps_success"]:
-            stage_name_pnpm_install_llm_deps = "pnpm Install (LLM-introduced deps)"
-            results["project_setup_stages"].append(stage_name_pnpm_install_llm_deps)
-            llm_deps_install_ok = _run_command_util(
-                ['pnpm', 'install', '--strict-peer-dependencies=false'],
-                cwd=project_final_path, results_dict=results, timeout=180,
-                command_name=stage_name_pnpm_install_llm_deps, check_on_error=False
-            )
-            results["pnpm_install_llm_deps_success"] = llm_deps_install_ok
-            if not llm_deps_install_ok:
-                 print(f"[{time.strftime('%H:%M:%S')}] Warning: pnpm install for LLM-introduced dependencies had issues for {site_identifier}.")
-    else:
-        print(f"[{time.strftime('%H:%M:%S')}] No new external packages detected in LLM code for explicit installation.")
-
     stage_name_eslint_fix = "ESLint Fix"
     results["project_setup_stages"].append(stage_name_eslint_fix)
     eslint_fix_cmd = ['pnpm', 'exec', 'eslint', '.', '--fix'] 

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
 Enhanced Auto Import Utility
-Automatically adds missing imports for:
-- "use client" directive
-- React hooks and components
-- Lucide icons
-- shadcn/ui components
-- cn utility function
+Automatically adds missing imports and cleans up common LLM syntax errors.
+- Strips Markdown code fences (e.g., ```tsx ... ```)
+- Adds "use client" directive
+- Adds missing React hooks and components
+- Adds missing Lucide icons
+- Adds missing shadcn/ui components
+- Adds missing cn utility function
 """
 
 import sys
 import re
 import json
+import time
 from pathlib import Path
 from typing import List, Set, Dict, Tuple
 from collections import defaultdict
@@ -213,6 +215,34 @@ class AutoImporter:
             print(f"⚠️  Warning: Could not load lucide icons from {path}: {e}")
             return set()
 
+    # ИЗМЕНЕНИЕ: Полностью переписанная функция для большей надежности
+    def _strip_markdown_fences(self, content: str) -> Tuple[str, bool]:
+        """
+        Strips leading/trailing Markdown code fences (```) from content.
+        Returns the cleaned content and a boolean indicating if a change was made.
+        """
+        lines = content.splitlines()
+        if not lines:
+            return content, False
+
+        # Находим индексы всех строк, которые являются "заборами" кода
+        fence_indices = [
+            i for i, line in enumerate(lines) if line.strip().startswith("```")
+        ]
+
+        # Если найдено как минимум два "забора" (открывающий и закрывающий)
+        if len(fence_indices) >= 2:
+            start_index = fence_indices[0]
+            end_index = fence_indices[-1]
+
+            # Убеждаемся, что между ними есть контент
+            if start_index < end_index:
+                # Извлекаем только строки между "заборами"
+                cleaned_lines = lines[start_index + 1 : end_index]
+                return "\n".join(cleaned_lines), True
+
+        return content, False
+
     def needs_use_client(self, content: str) -> bool:
         """Check if the file needs 'use client' directive."""
         # Skip if already has use client
@@ -378,7 +408,14 @@ class AutoImporter:
     def process_file(self, file_path: str) -> Dict[str, int]:
         """Process a single file and add missing imports."""
         path = Path(file_path)
-        stats = {"use_client": 0, "react": 0, "lucide": 0, "shadcn": 0, "cn": 0}
+        stats = {
+            "markdown_fences": 0,
+            "use_client": 0,
+            "react": 0,
+            "lucide": 0,
+            "shadcn": 0,
+            "cn": 0,
+        }
 
         # Only process JavaScript/TypeScript files
         if path.suffix not in [".js", ".jsx", ".ts", ".tsx"]:
@@ -390,6 +427,13 @@ class AutoImporter:
                 content = f.read()
 
             original_content = content
+            
+            # --- Strip Markdown fences first ---
+            content, was_stripped = self._strip_markdown_fences(content)
+            if was_stripped:
+                stats["markdown_fences"] = 1
+                print(f"  🔧 Stripped Markdown code fences.")
+
             imports_to_add = []
 
             # Check for "use client"
@@ -489,6 +533,7 @@ class AutoImporter:
         print("📊 Summary:")
         print(f"  Files processed: {files_processed}")
         print(f"  Files modified: {files_modified}")
+        print(f"  Markdown fences stripped: {total_stats['markdown_fences']}")
         print(f"  'use client' added: {total_stats['use_client']}")
         print(f"  React imports added: {total_stats['react']}")
         print(f"  Lucide icons added: {total_stats['lucide']}")
