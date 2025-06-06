@@ -72,7 +72,8 @@ async def call_weby_v1_generate(question: str, framework: str = "Nextjs", temper
         "files": files,
         "temperature": temperature,
         "top_p": top_p,
-        "framework": framework
+        "framework": framework,
+        # "nextjs_system_prompt": NEXTJS_SYSTEM_PROMPT
     }
     
     # Only include model in payload if it's explicitly provided

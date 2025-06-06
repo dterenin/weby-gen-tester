@@ -36,15 +36,47 @@ if 'output_queue' not in st.session_state:
 if 'current_process' not in st.session_state:
     st.session_state.current_process = None
 
+import threading
+import select
+import sys
+
 def stream_output(process, output_queue):
-    """Stream output from process to queue"""
+    """Stream output from process to queue with real-time handling"""
     try:
-        for line in iter(process.stdout.readline, ''):
-            if line:
-                output_queue.put(('stdout', line))
-        for line in iter(process.stderr.readline, ''):
-            if line:
-                output_queue.put(('stderr', line))
+        # Use threading to handle stdout and stderr simultaneously
+        def read_stdout():
+            try:
+                for line in iter(process.stdout.readline, ''):
+                    if line:
+                        output_queue.put(('stdout', line))
+            except Exception as e:
+                output_queue.put(('error', f'stdout error: {str(e)}'))
+        
+        def read_stderr():
+            try:
+                for line in iter(process.stderr.readline, ''):
+                    if line:
+                        output_queue.put(('stderr', line))
+            except Exception as e:
+                output_queue.put(('error', f'stderr error: {str(e)}'))
+        
+        # Start both threads
+        stdout_thread = threading.Thread(target=read_stdout)
+        stderr_thread = threading.Thread(target=read_stderr)
+        
+        stdout_thread.daemon = True
+        stderr_thread.daemon = True
+        
+        stdout_thread.start()
+        stderr_thread.start()
+        
+        # Wait for process to complete
+        process.wait()
+        
+        # Wait for threads to finish
+        stdout_thread.join(timeout=1)
+        stderr_thread.join(timeout=1)
+        
     except Exception as e:
         output_queue.put(('error', str(e)))
     finally:
@@ -98,20 +130,27 @@ def run_command_async(command):
         return False, f"Security validation failed: {message}"
     
     try:
+        # CRITICAL: Set test_running to True FIRST
         st.session_state.test_running = True
         st.session_state.live_output = f"Starting command: {command}\n"
+        
+        # Add command to history
+        st.session_state.command_history.append({
+            'command': command,
+            'timestamp': datetime.now().isoformat(),
+            'status': 'running'
+        })
         
         # Use shlex.split for safer command parsing
         cmd_parts = shlex.split(command)
         
         # Start process WITHOUT shell=True for better security
         process = subprocess.Popen(
-            cmd_parts,  # Use list instead of string
+            cmd_parts,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            # shell=False  # Remove shell=True
-            bufsize=1,
+            bufsize=0,  # Unbuffered for real-time output
             universal_newlines=True
         )
         
@@ -130,7 +169,7 @@ def run_command_async(command):
     except Exception as e:
         error_msg = f"Error starting command '{command}': {str(e)}"
         st.session_state.live_output = error_msg
-        st.session_state.test_running = False
+        st.session_state.test_running = False  # Reset on error
         return False, error_msg
 
 def update_live_output():
@@ -152,7 +191,13 @@ def update_live_output():
             elif msg_type == 'done':
                 returncode = content
                 st.session_state.live_output += f"\n[COMPLETED] Return code: {returncode}\n"
+                
+                # CRITICAL: Reset state and force interface update
                 st.session_state.test_running = False
+                st.session_state.current_process = None
+                
+                # Force interface update
+                st.rerun()
                 
                 # Update history
                 if st.session_state.command_history:
@@ -167,7 +212,6 @@ def update_live_output():
                 }
                 
                 st.session_state.last_output = st.session_state.live_output
-                st.session_state.current_process = None
                 updated = True
                 
         except queue.Empty:
@@ -198,6 +242,7 @@ def stop_current_command():
             st.session_state.live_output += f"\n[ERROR] Failed to stop command: {str(e)}\n"
 
 # Sidebar with system info
+# Add debug information to sidebar
 with st.sidebar:
     st.header("📊 System Info")
     st.info(f"**Working Dir:** {os.getcwd()}")
@@ -226,7 +271,11 @@ with st.sidebar:
 st.header("💻 Custom Command")
 
 # Use form to enable Enter key submission
+# Add explicit state check in form section
 with st.form(key="command_form", clear_on_submit=False):
+    # Explicitly check state before displaying form
+    form_disabled = st.session_state.get('test_running', False)
+    
     col1, col2 = st.columns([4, 1])
     
     with col1:
@@ -234,7 +283,7 @@ with st.form(key="command_form", clear_on_submit=False):
             "Enter any shell command:", 
             value="ls -la",
             placeholder="Enter command here...",
-            disabled=st.session_state.test_running,
+            disabled=form_disabled,  # Use explicit variable
             key="custom_command_input"
         )
     
@@ -244,7 +293,7 @@ with st.form(key="command_form", clear_on_submit=False):
         submit_button = st.form_submit_button(
             "▶️ Run Command", 
             type="primary", 
-            disabled=st.session_state.test_running
+            disabled=form_disabled  # Use the same variable
         )
     
     # Execute command when form is submitted (Enter or button click)
@@ -270,7 +319,7 @@ if allure_path.exists():
         with col2:
             st.write("")
             if st.button("📊 Generate Allure Report"):
-                # Исправлено: используем правильный путь к результатам
+                # Fixed: use correct path to results
                 cmd = f"allure generate allure-results/{selected_folder} -o allure-report --single-file --clean"
                 success, output = run_command_async(cmd)
                 if success:
@@ -316,8 +365,8 @@ if allure_path.exists():
                     )
         
         # Check for existing error files
-        # Исправлено: ищем правильный файл с ошибками
-        # Сначала проверяем общий файл build_errors_summary.txt
+        # Fixed: search for correct error file
+        # First check general build_errors_summary.txt file
         summary_file = Path("build_errors_summary.txt")
         if summary_file.exists():
             with open(summary_file, "rb") as f:
@@ -329,7 +378,7 @@ if allure_path.exists():
                     key="download_errors_summary"
                 )
         
-        # Также проверяем файл с именем папки (если он существует)
+        # Also check file with folder name (if it exists)
         errors_file = Path(f"build_errors_{selected_folder}.txt")
         if errors_file.exists():
             with open(errors_file, "rb") as f:
@@ -365,41 +414,45 @@ else:
 # Status section
 st.header("📊 Status & Output")
 
+# Always update output first
+update_live_output()
+
+# Simple status check
 if st.session_state.test_running:
     st.warning("🔄 Command is running...")
-    # Update live output
-    if update_live_output():
-        st.rerun()
 else:
     st.success("✅ Ready for commands")
 
 # Live Output section
 st.header("📄 Live Command Output")
-if st.session_state.test_running and st.session_state.live_output:
-    # Create a container for live output
-    output_container = st.container()
-    with output_container:
-        st.code(st.session_state.live_output, language="bash")
-        
-    # Auto-scroll to bottom (simulate)
-    if st.session_state.test_running:
-        time.sleep(0.5)
-        st.rerun()
-        
-elif st.session_state.last_output:
-    st.code(st.session_state.last_output, language="bash")
-else:
-    st.info("No output yet. Run a command to see results.")
-
-# Auto-refresh for live updates
 if st.session_state.test_running:
-    time.sleep(1)
-    st.rerun()
+    if st.session_state.live_output:
+        st.code(st.session_state.live_output, language="bash")
+    else:
+        st.info("Command is running, waiting for output...")
+else:
+    if st.session_state.last_output:
+        st.code(st.session_state.last_output, language="bash")
+    else:
+        st.info("No output yet. Run a command to see results.")
 
 # Footer
 st.markdown("---")
 st.markdown("**weby-gen-tester** - Powered by Streamlit")
 
-# Auto-refresh during command execution
+# Simple auto-refresh logic
 if st.session_state.test_running:
-    st_autorefresh(interval=500, key="live_update")
+    st_autorefresh(interval=1000, key="live_update")
+else:
+    # Force one final refresh when command completes to unlock the form
+    if 'command_just_completed' not in st.session_state:
+        st.session_state.command_just_completed = False
+    
+    # Check if we just completed a command
+    if (st.session_state.current_process is None and 
+        st.session_state.command_history and 
+        st.session_state.command_history[-1].get('status') == 'completed' and
+        not st.session_state.command_just_completed):
+        
+        st.session_state.command_just_completed = True
+        st.rerun()  # One final rerun to unlock the form

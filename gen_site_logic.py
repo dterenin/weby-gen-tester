@@ -258,107 +258,76 @@ def process_generated_site(tesslate_response_content: str, base_tmp_dir: str, si
     for old_pattern, new_string in replacements:
         tesslate_response_content = re.sub(old_pattern, new_string, tesslate_response_content, flags=re.DOTALL)
     if original_llm_content_for_fixes != tesslate_response_content:
-        results["llm_syntax_fixes_applied"] += (tesslate_response_content.count("/* Patched:") - original_llm_content_for_fixes.count("/* Patched:"))
+        results["llm_syntax_fixes_applied"] += 1
 
     edit_blocks = re.findall(r'<Edit filename="(.*?)">([\s\S]*?)<\/Edit>', tesslate_response_content)
-    if not edit_blocks:
-        print(f"[{time.strftime('%H:%M:%S')}] No <Edit> blocks found in LLM response for {site_identifier}. Proceeding with template build.")
-    
-    for filename, code_content in edit_blocks:
-        filename = filename.replace('\\"', '"').strip()
-        code_content_unescaped = code_content.replace(r'<', '<').replace(r'>', '>').replace(r'&', '&')
-        code_content_unescaped = code_content_unescaped.replace(r'\"', '"').replace(r"\'", "'").replace(r'\\', '\\')
+    if edit_blocks:
+        # Initialize auto fix tracking
+        auto_fix_script = os.path.join(os.path.dirname(__file__), "auto_fix_imports.py")
+        auto_fix_results = []
 
-        # BEGIN: NEW - Strip Markdown code blocks if present
-        stripped_content = code_content_unescaped.strip()
-        if stripped_content.startswith('```') and stripped_content.endswith('```'):
-            lines = stripped_content.splitlines()
-            # Ensure there's a language specifier on the first fence and a closing fence
-            if len(lines) > 1 and lines[0].strip().startswith('```') and lines[-1].strip() == '```':
-                # Remove the first and last lines (code fences)
-                code_content_unescaped = "\n".join(lines[1:-1])
-                print(f"[{time.strftime('%H:%M:%S')}] Stripped Markdown code fences from {filename}.")
-                results["llm_syntax_fixes_applied"] = results.get("llm_syntax_fixes_applied", 0) + 1 # Count this as a fix
-        # END: NEW - Strip Markdown code blocks if present
+        for filename, code_content in edit_blocks:
+            filename = filename.replace('\\"', '"').strip()
+            code_content_unescaped = code_content.replace(r'<', '<').replace(r'>', '>').replace(r'&', '&')
+            code_content_unescaped = code_content_unescaped.replace(r'\"', '"').replace(r"\'", "'").replace(r'\\', '\\')
+            target_path = os.path.normpath(os.path.join(project_final_path, filename))
 
-        # BEGIN: Automated "use client"; injection logic
-        client_indicators = [
-            r'useState\s*\(',
-            r'useEffect\s*\(',
-            r'useContext\s*\(',
-            r'useReducer\s*\(',
-            r'useRef\s*\(',
-            r'useCallback\s*\(',
-            r'useMemo\s*\(',
-            r'onClick\s*=',
-            r'onChange\s*=',
-            r'onSubmit\s*=',
-            r'onBlur\s*=',
-            r'onFocus\s*=',
-            r'window\.',
-            r'document\.',
-            r'localStorage\.',
-            r'sessionStorage\.',
-            r'navigator\.',
-            r'react-hot-toast',
-            r'sonner',
-            r'dnd-kit',
-            r'embla-carousel-react',
-            r'recharts',
-            r'cmdk',
-            r'input-otp',
-            r'react-day-picker',
-            r'react-hook-form',
-            r'next-themes',
-            r'vaul',
-            r'express',
-        ]
+            if not target_path.startswith(os.path.abspath(project_final_path)):
+                results["error_messages"].append(f"Security risk: LLM write attempt outside project: {filename}")
+                results["llm_files_write_success"] = False
+                continue
 
-        needs_use_client = False
-        if not code_content_unescaped.strip().startswith(('"use client";', "'use client';")):
-            for pattern in client_indicators:
-                if re.search(pattern, code_content_unescaped):
-                    needs_use_client = True
-                    break
-        
-        if needs_use_client:
-            print(f"[{time.strftime('%H:%M:%S')}] Auto-prepending '\"use client\";' to {filename} due to detected client indicators.")
-            code_content_unescaped = '"use client";\n' + code_content_unescaped
-            results["llm_syntax_fixes_applied"] = results.get("llm_syntax_fixes_applied", 0) + 1
-        # END: Automated "use client"; injection logic
-            
-        target_path = os.path.normpath(os.path.join(project_final_path, filename))
-        if not os.path.abspath(target_path).startswith(os.path.abspath(project_final_path)):
-            error_msg = f"Security risk: LLM tried to write to '{filename}' which resolves outside the project directory: '{target_path}'"
-            print(f"ERROR: {error_msg}")
-            results["error_messages"].append(error_msg)
-            results["llm_files_write_success"] = False; continue
-        _create_file_with_content(target_path, code_content_unescaped, results, f"AI-generated file: {filename}")
-        if any(err_msg.startswith(f"Error creating/writing file AI-generated file: {filename}") for err_msg in results.get("error_messages", [])):
-            results["llm_files_write_success"] = False
-        # END: Automated "use client"; injection logic
-            
-        target_path = os.path.normpath(os.path.join(project_final_path, filename))
-        if not os.path.abspath(target_path).startswith(os.path.abspath(project_final_path)):
-            error_msg = f"Security risk: LLM tried to write to '{filename}' which resolves outside the project directory: '{target_path}'"
-            print(f"ERROR: {error_msg}")
-            results["error_messages"].append(error_msg)
-            results["llm_files_write_success"] = False; continue
-        _create_file_with_content(target_path, code_content_unescaped, results, f"AI-generated file: {filename}")
-        if any(err_msg.startswith(f"Error creating/writing file AI-generated file: {filename}") for err_msg in results.get("error_messages", [])):
-            results["llm_files_write_success"] = False
+            # Write the file
+            _create_file_with_content(target_path, code_content_unescaped, results, f"AI-generated file: {filename}")
+
+            # Check if file write was successful
+            if any(err_msg.startswith(f"Error creating/writing file AI-generated file: {filename}") for err_msg in results.get("error_messages", [])):
+                results["llm_files_write_success"] = False
+                continue
+
+            # Apply auto fix to this specific file
+            stage_name_auto_fix = f"Auto Import Fix: {filename}"
+            if "project_setup_stages" not in results:
+                results["project_setup_stages"] = []
+            results["project_setup_stages"].append(stage_name_auto_fix)
+
+            auto_fix_cmd = [sys.executable, auto_fix_script, target_path]
+
+            auto_fix_success = _run_command_util(
+                auto_fix_cmd,
+                cwd=project_final_path,
+                results_dict=results,
+                timeout=120,
+                command_name=stage_name_auto_fix
+            )
+
+            auto_fix_results.append({
+                "filename": filename,
+                "success": auto_fix_success
+            })
+
+            # Log individual file auto fix result
+            if auto_fix_success:
+                print(f"[{time.strftime('%H:%M:%S')}] Auto fix completed successfully for {filename}")
+            else:
+                print(f"[{time.strftime('%H:%M:%S')}] Auto fix failed for {filename}")
+
+        # Set overall auto fix success based on all individual results
+        results["auto_fix_success"] = all(result["success"] for result in auto_fix_results)
+        results["auto_fix_results"] = auto_fix_results
+
+        if not results["auto_fix_success"]:
+            failed_files = [result["filename"] for result in auto_fix_results if not result["success"]]
+            results["error_messages"].append(f"Auto fix failed for files: {', '.join(failed_files)}")
 
     if not results["llm_files_write_success"]:
         print(f"[{time.strftime('%H:%M:%S')}] Error writing one or more LLM files for {site_identifier}. Aborting build process.")
-        results["pnpm_install_llm_deps_success"] = False
-        results["eslint_fix_success"] = False
-        results["prettier_success"] = False
-        results["build_success"] = False
-        return results
+        return results  # Stop if LLM files couldn't be written
 
-    external_pkgs_from_llm = set()
-    for _, code in edit_blocks: 
-        external_pkgs_from_llm.update(extract_external_packages(code))
+    # Add
+    external_pkgs = set()
+    for _, code in edit_blocks:
+        external_pkgs |= extract_external_packages(code)
 
     if external_pkgs_from_llm:
         print(f"[{time.strftime('%H:%M:%S')}] LLM code seems to use external packages: {external_pkgs_from_llm}")
