@@ -1,121 +1,158 @@
 // auto_fixer.ts
-import { Project, SourceFile, SyntaxKind, Node, ts, Identifier, ImportDeclaration } from "ts-morph";
+import { Project, SourceFile, Node, ImportDeclaration, SyntaxKind, ts, Identifier } from "ts-morph";
 import path from "node:path";
 
 // A map to store all available exports in the project.
-// Key: export name (e.g., "Button"), Value: information about the export.
 const exportMap = new Map<string, { path: string; isDefault: boolean }>();
 
 /**
- * First pass: Traverse the entire project to find and map all available exports.
- * This populates the `exportMap`.
+ * Pass 1: Proactively refactors key components (like Header/Footer) to use named exports.
+ * This is still valuable to enforce a consistent style at the source.
  */
-function buildExportMap(project: Project) {
-  console.log("  - [Pass 1] Building project-wide export map...");
-  project.getSourceFiles().forEach(sourceFile => {
-    // Ignore node_modules and declaration files for performance
-    if (sourceFile.getFilePath().includes("/node_modules/") || sourceFile.isDeclarationFile()) {
-      return;
-    }
+function enforceNamedExports(project: Project) {
+  console.log("  - [Pass 1] Enforcing named exports for key components...");
+  
+  const componentsToRefactor = ["src/components/header.tsx", "src/components/footer.tsx"];
+  
+  for (const relativePath of componentsToRefactor) {
+    const sourceFile = project.getSourceFile(sf => sf.getFilePath().endsWith(relativePath));
+    if (!sourceFile) continue;
 
-    const relativePath = path.relative(project.getRootDirectories()[0].getPath(), sourceFile.getFilePath()).replace(/\.(ts|tsx)$/, '');
-    const moduleSpecifier = `@/${relativePath}`;
+    const exportAssignment = sourceFile.getExportAssignment(e => !e.isExportEquals());
+    if (!exportAssignment) continue;
+    
+    const expression = exportAssignment.getExpression();
+    if (!Node.isIdentifier(expression)) continue;
 
-    // Find default exports: `export default ...`
-    const defaultExport = sourceFile.getDefaultExportSymbol();
-    if (defaultExport) {
-      let finalName: string | null = null;
-      // CORRECTED: Try to get the actual name from the export expression (e.g., `export default MyComponent`)
-      const exportAssignment = defaultExport.getDeclarations()[0];
-      if (Node.isExportAssignment(exportAssignment)) {
-          const expression = exportAssignment.getExpression();
-          if (Node.isIdentifier(expression)) {
-              finalName = expression.getText();
-          }
-      }
-      
-      // Fallback to the old logic (PascalCased filename) if a name couldn't be inferred
-      if (!finalName) {
-        const componentName = sourceFile.getBaseNameWithoutExtension();
-        // Use PascalCase for component names, common convention.
-        finalName = componentName.charAt(0).toUpperCase() + componentName.slice(1);
-      }
-      
-      if (!exportMap.has(finalName)) {
-        exportMap.set(finalName, { path: moduleSpecifier, isDefault: true });
+    const exportName = expression.getText();
+    console.log(`    - 🔄 Refactoring '${exportName}' in ${relativePath} to a named export.`);
+    
+    const referencedSymbols = expression.findReferences();
+    for (const referencedSymbol of referencedSymbols) {
+      for (const reference of referencedSymbol.getReferences()) {
+        const node = reference.getNode();
+        const importClause = node.getParentIfKind(SyntaxKind.ImportClause);
+        if (importClause && importClause.getDefaultImport()?.getText() === exportName) {
+          const importDeclaration = importClause.getParentIfKindOrThrow(SyntaxKind.ImportDeclaration);
+          const existingNamed = importDeclaration.getNamedImports().map(ni => ni.getName());
+          const newNamed = [...existingNamed, exportName].sort();
+          importDeclaration.removeDefaultImport();
+          importDeclaration.addNamedImports(newNamed);
+        }
       }
     }
 
-    // Find named exports: `export { Button }` or `export const Button = ...`
-    sourceFile.getExportSymbols().forEach(symbol => {
-      const name = symbol.getName();
-      // CORRECTED: `cn` is often a named export from `lib/utils`, this logic will now find it.
-      if (name !== "default" && !exportMap.has(name)) {
-        exportMap.set(name, { path: moduleSpecifier, isDefault: false });
-      }
-    });
-  });
-  console.log(`  - [Pass 1] Export map built. Found ${exportMap.size} unique potential imports.`);
+    const declaration = expression.getSymbolOrThrow().getDeclarations()[0];
+    if (Node.isVariableDeclaration(declaration)) {
+      const varStatement = declaration.getParent().getParent();
+      if (Node.isVariableStatement(varStatement)) varStatement.setIsExported(true);
+    } else if (Node.isFunctionDeclaration(declaration) || Node.isClassDeclaration(declaration)) {
+      declaration.setIsExported(true);
+    }
+    
+    exportAssignment.remove();
+  }
 }
 
+/**
+ * Pass 2: Build the map of all available exports.
+ * This is needed for fixing completely missing imports (TS2304).
+ */
+function buildExportMap(project: Project) {
+  console.log("  - [Pass 2] Building project-wide export map...");
+  exportMap.clear();
+
+  project.getSourceFiles().forEach(sourceFile => {
+    if (sourceFile.getFilePath().includes("/node_modules/") || sourceFile.isDeclarationFile()) return;
+    const relativePath = path.relative(project.getRootDirectories()[0].getPath(), sourceFile.getFilePath()).replace(/\.(ts|tsx)$/, '');
+    const moduleSpecifier = `@/${relativePath.replace(/\/index$/, '')}`;
+    const defaultExportSymbol = sourceFile.getDefaultExportSymbol();
+    if (defaultExportSymbol) {
+      let exportName = defaultExportSymbol.getAliasedSymbol()?.getName() ?? defaultExportSymbol.getName();
+      if (exportName === 'default') {
+        const baseName = sourceFile.getBaseNameWithoutExtension();
+        exportName = (baseName !== 'index') ? (baseName.charAt(0).toUpperCase() + baseName.slice(1)) : (path.basename(path.dirname(sourceFile.getFilePath())).charAt(0).toUpperCase() + path.basename(path.dirname(sourceFile.getFilePath())).slice(1));
+      }
+      if (!exportMap.has(exportName)) exportMap.set(exportName, { path: moduleSpecifier, isDefault: true });
+    }
+    sourceFile.getExportSymbols().forEach(symbol => {
+      const name = symbol.getName();
+      if (name !== "default" && !exportMap.has(name)) exportMap.set(name, { path: moduleSpecifier, isDefault: false });
+    });
+  });
+  console.log(`  - [Pass 2] Export map built. Found ${exportMap.size} unique potential imports.`);
+}
 
 /**
- * Second pass: Find unresolved identifiers and add the correct imports based on the export map.
+ * Pass 3: Fix all import-related errors based on TypeScript diagnostics.
+ * This is the new, unified, and most reliable fixing mechanism.
  */
-function fixMissingImportsIntelligently(sourceFile: SourceFile) {
-  console.log(`  - [Pass 2] Analyzing imports for ${path.basename(sourceFile.getFilePath())}...`);
+function fixImportsBasedOnDiagnostics(sourceFile: SourceFile) {
+  console.log(`  - [Pass 3] Fixing imports in ${path.basename(sourceFile.getFilePath())} based on diagnostics...`);
   const diagnostics = sourceFile.getPreEmitDiagnostics();
-  const unresolvedIdentifiers = new Set<string>();
-
-  // Error code 2304: Cannot find name '...'.
-  diagnostics.forEach(diagnostic => {
-    if (diagnostic.getCode() === 2304) {
-      const messageText = diagnostic.getMessageText();
-      const match = typeof messageText === 'string' && messageText.match(/'([^']+)'/);
-      if (match) {
-        unresolvedIdentifiers.add(match[1]);
-      }
-    }
-  });
-
-  if (unresolvedIdentifiers.size === 0) {
-    console.log(`    - No unresolved identifiers found. Skipping.`);
+  if (diagnostics.length === 0) {
+    console.log("    - No diagnostics found. Skipping.");
     return;
   }
 
-  console.log(`    - Found unresolved identifiers: ${Array.from(unresolvedIdentifiers).join(', ')}`);
-
-  // Add imports for each unresolved identifier found in our map
-  unresolvedIdentifiers.forEach(name => {
-    // CORRECTED: Add a special, high-priority case for the `cn` utility function.
-    if (name === 'cn') {
-        console.log(`    - 🎯 Special case: Found 'cn'. Importing from '@/lib/utils'.`);
-        sourceFile.addImportDeclaration({
-            moduleSpecifier: '@/lib/utils',
-            namedImports: ['cn'],
-        });
-        return; // Skip the generic lookup for `cn`
+  let changesMade = false;
+  for (const diagnostic of diagnostics) {
+    const code = diagnostic.getCode();
+    const messageText = diagnostic.getMessageText();
+    
+    // CASE 1: `Module '...' has no default export. Did you mean 'import { ... } from ...'?`
+    if (code === 2613 && typeof messageText === 'string') {
+        const match = messageText.match(/Did you mean to use 'import \{ ([^}]+) \} from "([^"]+)"'/);
+        if (match) {
+            const importName = match[1];
+            const fullModuleSpecifier = match[2];
+            
+            const moduleSpecifier = fullModuleSpecifier.includes('@/') 
+                ? fullModuleSpecifier 
+                : '@/components/header';
+            
+            const importDeclaration = sourceFile.getImportDeclaration(d => 
+                d.getModuleSpecifier().getLiteralValue().includes('header') || 
+                d.getModuleSpecifier().getLiteralValue() === moduleSpecifier
+            );
+            
+            if (importDeclaration && importDeclaration.getDefaultImport()) {
+                console.log(`    - 🛠️  Fixing incorrect default import for '${importName}' (TS2613).`);
+                importDeclaration.removeDefaultImport();
+                importDeclaration.addNamedImport(importName);
+                changesMade = true;
+            }
+        }
     }
 
-    const exportInfo = exportMap.get(name);
-    if (exportInfo) {
-      console.log(`    - Found match for '${name}'. Importing from '${exportInfo.path}' (isDefault: ${exportInfo.isDefault})`);
-      
-      const newImport: ImportDeclaration = sourceFile.addImportDeclaration({
-        moduleSpecifier: exportInfo.path,
-      });
+    // CASE 2: `Cannot find name '...'`
+    if (code === 2304 && typeof messageText === 'string') {
+        const match = messageText.match(/'([^']+)'/);
+        if (match) {
+            const importName = match[1];
+            if (importName === 'cn') {
+                console.log(`    - 🎯 Adding special case: 'cn' from '@/lib/utils' (TS2304).`);
+                sourceFile.addImportDeclaration({ moduleSpecifier: '@/lib/utils', namedImports: ['cn'] });
+                changesMade = true;
+                continue;
+            }
 
-      if (exportInfo.isDefault) {
-        newImport.setDefaultImport(name);
-      } else {
-        newImport.addNamedImport(name);
-      }
-    } else {
-        console.log(`    - ⚠️ No match found in export map for '${name}'. It might be a native type or from an un-indexed library.`);
+            const exportInfo = exportMap.get(importName);
+            if (exportInfo) {
+                console.log(`    - ✅ Adding missing import for '${importName}' (TS2304).`);
+                const newImport = sourceFile.addImportDeclaration({ moduleSpecifier: exportInfo.path });
+                if (exportInfo.isDefault) newImport.setDefaultImport(importName);
+                else newImport.addNamedImport(importName);
+                changesMade = true;
+            }
+        }
     }
-  });
+  }
+
+  if (!changesMade) {
+    console.log("    - No actionable import diagnostics found.");
+  }
 }
-
 
 /**
  * The core code fixer logic.
@@ -124,31 +161,28 @@ async function fixProject(projectPath: string, specificFilePaths: string[]): Pro
   console.log("🤖 [TS] Initializing TypeScript project...");
   const project = new Project({
     tsConfigFilePath: path.join(projectPath, "tsconfig.json"),
-    // Important for performance: skip adding files from node_modules.
     skipAddingFilesFromTsConfig: true,
   });
 
-  // Explicitly add only the files we need to process to the project.
-  console.log(`🤖 [TS] Adding ${specificFilePaths.length} source files to the project...`);
-  const sourceFiles = specificFilePaths.map(filePath => project.addSourceFileAtPath(filePath));
-
-  // CORRECTED: Scan the *entire* src directory for potential imports, not just components.
-  // This is crucial for finding helpers like `cn` in `lib/utils` and components in `ui/`.
   const srcDir = path.join(projectPath, 'src');
-  console.log(`🤖 [TS] Indexing all exportable symbols in ${srcDir}...`);
+  console.log(`🤖 [TS] Indexing all source files in ${srcDir}...`);
   project.addSourceFilesAtPaths(`${srcDir}/**/*.{ts,tsx}`);
   
-  // --- PASS 1: Build the map of all available exports ---
-  buildExportMap(project);
+  // --- PASS 1: Proactively refactor key components to use named exports ---
+  enforceNamedExports(project);
 
-  // --- PASS 2: Fix imports intelligently for each target file ---
-  for (const sourceFile of sourceFiles) {
-    fixMissingImportsIntelligently(sourceFile);
-  }
+  // --- PASS 2: Build the map of all available exports based on the new reality ---
+  buildExportMap(project);
   
-  // --- PASS 3: Final cleanup ---
-  console.log("  - [Pass 3] Organizing imports and cleaning up...");
-  for (const sourceFile of sourceFiles) {
+  // --- PASS 3: Fix all import errors in the target files based on diagnostics ---
+  const sourceFilesToFix = specificFilePaths.map(filePath => project.getSourceFileOrThrow(filePath));
+  for (const sourceFile of sourceFilesToFix) {
+    fixImportsBasedOnDiagnostics(sourceFile);
+  }
+
+  // --- PASS 4: Final cleanup ---
+  console.log("  - [Pass 4] Organizing imports and cleaning up...");
+  for (const sourceFile of sourceFilesToFix) {
     sourceFile.organizeImports();
   }
 
