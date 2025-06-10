@@ -1,119 +1,155 @@
 // auto_fixer.ts
-import { Project, SourceFile, SyntaxKind, Node } from "ts-morph";
+import { Project, SourceFile, SyntaxKind, Node, ts, Identifier, ImportDeclaration } from "ts-morph";
 import path from "node:path";
 
+// A map to store all available exports in the project.
+// Key: export name (e.g., "Button"), Value: information about the export.
+const exportMap = new Map<string, { path: string; isDefault: boolean }>();
+
 /**
- * Specifically corrects known wrong imports that ts-morph might add.
- * This runs AFTER fixMissingImports and acts as a "cleanup" step.
+ * First pass: Traverse the entire project to find and map all available exports.
+ * This populates the `exportMap`.
  */
-function correctAmbiguousImports(sourceFile: SourceFile): boolean {
-  let wasModified = false;
-  for (const importDeclaration of sourceFile.getImportDeclarations()) {
-    // Rule 1: 'Button' should never come from 'react-day-picker' in this project.
-    if (importDeclaration.getModuleSpecifierValue() === 'react-day-picker') {
-      const buttonImport = importDeclaration.getNamedImports().find(spec => spec.getName() === 'Button');
-      if (buttonImport) {
-        console.log(`    - Correcting wrong import: Button from 'react-day-picker'.`);
-        buttonImport.remove();
-        // Add the correct import
-        sourceFile.addImportDeclaration({
-            moduleSpecifier: '@/components/ui/button',
-            namedImports: ['Button']
-        });
-        wasModified = true;
+function buildExportMap(project: Project) {
+  console.log("  - [Pass 1] Building project-wide export map...");
+  project.getSourceFiles().forEach(sourceFile => {
+    // Ignore node_modules and declaration files for performance
+    if (sourceFile.getFilePath().includes("/node_modules/") || sourceFile.isDeclarationFile()) {
+      return;
+    }
+
+    const relativePath = path.relative(project.getRootDirectories()[0].getPath(), sourceFile.getFilePath()).replace(/\.(ts|tsx)$/, '');
+    const moduleSpecifier = `@/${relativePath}`;
+
+    // Find default exports: `export default ...`
+    const defaultExport = sourceFile.getDefaultExportSymbol();
+    if (defaultExport) {
+      let finalName: string | null = null;
+      // CORRECTED: Try to get the actual name from the export expression (e.g., `export default MyComponent`)
+      const exportAssignment = defaultExport.getDeclarations()[0];
+      if (Node.isExportAssignment(exportAssignment)) {
+          const expression = exportAssignment.getExpression();
+          if (Node.isIdentifier(expression)) {
+              finalName = expression.getText();
+          }
+      }
+      
+      // Fallback to the old logic (PascalCased filename) if a name couldn't be inferred
+      if (!finalName) {
+        const componentName = sourceFile.getBaseNameWithoutExtension();
+        // Use PascalCase for component names, common convention.
+        finalName = componentName.charAt(0).toUpperCase() + componentName.slice(1);
+      }
+      
+      if (!exportMap.has(finalName)) {
+        exportMap.set(finalName, { path: moduleSpecifier, isDefault: true });
       }
     }
+
+    // Find named exports: `export { Button }` or `export const Button = ...`
+    sourceFile.getExportSymbols().forEach(symbol => {
+      const name = symbol.getName();
+      // CORRECTED: `cn` is often a named export from `lib/utils`, this logic will now find it.
+      if (name !== "default" && !exportMap.has(name)) {
+        exportMap.set(name, { path: moduleSpecifier, isDefault: false });
+      }
+    });
+  });
+  console.log(`  - [Pass 1] Export map built. Found ${exportMap.size} unique potential imports.`);
+}
+
+
+/**
+ * Second pass: Find unresolved identifiers and add the correct imports based on the export map.
+ */
+function fixMissingImportsIntelligently(sourceFile: SourceFile) {
+  console.log(`  - [Pass 2] Analyzing imports for ${path.basename(sourceFile.getFilePath())}...`);
+  const diagnostics = sourceFile.getPreEmitDiagnostics();
+  const unresolvedIdentifiers = new Set<string>();
+
+  // Error code 2304: Cannot find name '...'.
+  diagnostics.forEach(diagnostic => {
+    if (diagnostic.getCode() === 2304) {
+      const messageText = diagnostic.getMessageText();
+      const match = typeof messageText === 'string' && messageText.match(/'([^']+)'/);
+      if (match) {
+        unresolvedIdentifiers.add(match[1]);
+      }
+    }
+  });
+
+  if (unresolvedIdentifiers.size === 0) {
+    console.log(`    - No unresolved identifiers found. Skipping.`);
+    return;
   }
-  return wasModified;
-}
 
-/**
- * Checks if a source file uses the react-day-picker library.
- */
-function fileUsesDayPicker(sourceFile: SourceFile): boolean {
-    return /react-day-picker|Calendar/.test(sourceFile.getFullText());
-}
+  console.log(`    - Found unresolved identifiers: ${Array.from(unresolvedIdentifiers).join(', ')}`);
 
-/**
- * Wraps the root JSX element in a `DayPickerProvider` if needed.
- */
-function wrapRootJsxInProvider(sourceFile: SourceFile): boolean {
-    const returnStatement = sourceFile.getDescendantsOfKind(SyntaxKind.ReturnStatement).pop();
-    if (!returnStatement) return false;
-
-    const returnExpression = returnStatement.getExpression();
-    if (!returnExpression || !Node.isJsxElement(returnExpression) && !Node.isJsxFragment(returnExpression)) return false;
-    
-    // Avoid double-wrapping
-    if (returnExpression.getParentIfKind(SyntaxKind.JsxElement)?.getOpeningElement().getTagNameNode().getText() === 'DayPickerProvider') {
-        return false;
+  // Add imports for each unresolved identifier found in our map
+  unresolvedIdentifiers.forEach(name => {
+    // CORRECTED: Add a special, high-priority case for the `cn` utility function.
+    if (name === 'cn') {
+        console.log(`    - 🎯 Special case: Found 'cn'. Importing from '@/lib/utils'.`);
+        sourceFile.addImportDeclaration({
+            moduleSpecifier: '@/lib/utils',
+            namedImports: ['cn'],
+        });
+        return; // Skip the generic lookup for `cn`
     }
 
-    returnExpression.replaceWithText(`<DayPickerProvider initialProps={{}}>${returnExpression.getText()}</DayPickerProvider>`);
-    return true;
+    const exportInfo = exportMap.get(name);
+    if (exportInfo) {
+      console.log(`    - Found match for '${name}'. Importing from '${exportInfo.path}' (isDefault: ${exportInfo.isDefault})`);
+      
+      const newImport: ImportDeclaration = sourceFile.addImportDeclaration({
+        moduleSpecifier: exportInfo.path,
+      });
+
+      if (exportInfo.isDefault) {
+        newImport.setDefaultImport(name);
+      } else {
+        newImport.addNamedImport(name);
+      }
+    } else {
+        console.log(`    - ⚠️ No match found in export map for '${name}'. It might be a native type or from an un-indexed library.`);
+    }
+  });
 }
+
 
 /**
  * The core code fixer logic.
  */
 async function fixProject(projectPath: string, specificFilePaths: string[]): Promise<void> {
   console.log("🤖 [TS] Initializing TypeScript project...");
-  const project = new Project({ tsConfigFilePath: path.join(projectPath, "tsconfig.json") });
+  const project = new Project({
+    tsConfigFilePath: path.join(projectPath, "tsconfig.json"),
+    // Important for performance: skip adding files from node_modules.
+    skipAddingFilesFromTsConfig: true,
+  });
+
+  // Explicitly add only the files we need to process to the project.
+  console.log(`🤖 [TS] Adding ${specificFilePaths.length} source files to the project...`);
+  const sourceFiles = specificFilePaths.map(filePath => project.addSourceFileAtPath(filePath));
+
+  // CORRECTED: Scan the *entire* src directory for potential imports, not just components.
+  // This is crucial for finding helpers like `cn` in `lib/utils` and components in `ui/`.
+  const srcDir = path.join(projectPath, 'src');
+  console.log(`🤖 [TS] Indexing all exportable symbols in ${srcDir}...`);
+  project.addSourceFilesAtPaths(`${srcDir}/**/*.{ts,tsx}`);
   
-  let sourceFiles: SourceFile[];
+  // --- PASS 1: Build the map of all available exports ---
+  buildExportMap(project);
 
-  // --- PERFORMANCE OPTIMIZATION ---
-  // If specific file paths are provided, only load those files.
-  if (specificFilePaths.length > 0) {
-    console.log(`🤖 [TS] Targeted mode: Processing ${specificFilePaths.length} specific file(s).`);
-    sourceFiles = specificFilePaths.map(filePath => {
-        try {
-            // `addSourceFileAtPath` is robust for adding files that may or may not be known to the project yet.
-            return project.addSourceFileAtPath(filePath);
-        } catch (e) {
-            console.error(`    - ❌ Critical error adding file ${filePath}: ${e}`);
-            // Re-throw to halt the process if a file can't be added
-            throw e;
-        }
-    });
-  } else {
-    // This fallback is kept for standalone script usage but won't be hit by the Python orchestrator.
-    console.log(`🤖 [TS] Fallback mode: Scanning all files in project.`);
-    sourceFiles = project.getSourceFiles().filter(f => !f.getFilePath().includes("/node_modules/") && /\.(ts|tsx)$/.test(f.getFilePath()));
-  }
-  console.log(`🤖 [TS] Loaded ${sourceFiles.length} files to process.`);
-
-  // --- PASS 1: Fix imports and correct common mistakes ---
+  // --- PASS 2: Fix imports intelligently for each target file ---
   for (const sourceFile of sourceFiles) {
-    const baseName = path.basename(sourceFile.getFilePath());
-    console.log(`  - Running import fixes on ${baseName}`);
-    // Let ts-morph do the heavy lifting.
-    sourceFile.fixMissingImports();
-    // Surgically correct known mistakes it might make.
-    correctAmbiguousImports(sourceFile);
+    fixMissingImportsIntelligently(sourceFile);
   }
   
-  // --- PASS 2: Fix context providers ---
-  // This needs to run after imports are fixed, so we know which files use the library.
-  if (sourceFiles.some(fileUsesDayPicker)) {
-    console.log("  - Project uses DayPicker. Applying provider fix to entry points...");
-    // Only check page.tsx files within the set of files being processed
-    const pageFiles = sourceFiles.filter(f => f.getFilePath().includes('/app/') && f.getFilePath().endsWith('page.tsx'));
-    for (const pageFile of pageFiles) {
-        if (wrapRootJsxInProvider(pageFile)) {
-            console.log(`    - Wrapped ${path.basename(pageFile.getFilePath())} in DayPickerProvider.`);
-        }
-    }
-  }
-
   // --- PASS 3: Final cleanup ---
+  console.log("  - [Pass 3] Organizing imports and cleaning up...");
   for (const sourceFile of sourceFiles) {
-      // Add DayPickerProvider import if needed after wrapping
-      if (sourceFile.getFullText().includes('<DayPickerProvider')) {
-          sourceFile.addImportDeclaration({ moduleSpecifier: 'react-day-picker', namedImports: ['DayPickerProvider'] });
-      }
-      // Organize all imports alphabetically and remove unused ones.
-      sourceFile.organizeImports();
+    sourceFile.organizeImports();
   }
 
   console.log("🤖 [TS] Saving all changes...");
@@ -122,8 +158,6 @@ async function fixProject(projectPath: string, specificFilePaths: string[]): Pro
 }
 
 // --- Main execution block ---
-// FIX: Argument indices are adjusted for `ts-node script.ts arg1 arg2 ...`
-// `process.argv` will be: `['node', 'path/to/ts-node', 'path/to/auto_fixer.ts', projectDirectory, ...specificFiles]`
 const projectDirectory = process.argv[2];
 const specificFiles = process.argv.slice(3);
 

@@ -14,14 +14,16 @@ from pytest_assume.plugin import assume
 import socket
 import contextlib
 from datetime import datetime
-# shutil больше не нужен для основного копирования
-# import shutil 
+import shutil
 
 # Import functions from your business logic module
+# Make sure gen_site_logic.py is the correct filename and path
 from gen_site_logic import process_generated_site, create_golden_template
 
-# --- CONFIGURATION: Set to True to enable video recording ---
+# --- CONFIGURATION ---
 RECORD_VIDEO = False
+# The repository URL is now centralized here for consistency
+NEXTJS_REPO_URL = "https://github.com/dterenin/weby-nextjs-template"
 
 # Fallback LLM response for when CSV loading fails
 LLM_TEST_RESPONSE_FALLBACK = """
@@ -50,16 +52,17 @@ def get_free_port() -> int:
 def load_test_data(csv_filepath=None):
     """Loads test data from a CSV file or uses fallback data."""
     test_cases = []
-    config = getattr(pytest, 'global_test_context', {}).get('config', None)
+    # Use the globally stored config from conftest.py
+    config = getattr(pytest, 'global_test_context', None)
     
     output_response_field = "output_response"
     framework_field = "metadata_framework"
     input_question_field = "input_question"
 
-    if config and hasattr(config, "option"):
-        output_response_field = getattr(config.option, "csv_output_field", output_response_field)
-        framework_field = getattr(config.option, "csv_framework_field", framework_field)
-        input_question_field = getattr(config.option, "csv_input_field", input_question_field)
+    if config and hasattr(config, "getoption"):
+        output_response_field = config.getoption("csv_output_field") or output_response_field
+        framework_field = config.getoption("csv_framework_field") or framework_field
+        input_question_field = config.getoption("csv_input_field") or input_question_field
     
     if csv_filepath is None:
         datasets_dir = "datasets"
@@ -85,27 +88,10 @@ def load_test_data(csv_filepath=None):
             print(f"WARNING: CSV {csv_filepath} is empty or headerless. Using fallback.")
             return [("fallback_site_1", LLM_TEST_RESPONSE_FALLBACK, "Fallback: CSV empty/headerless")]
         
-        required_fields_map = {
-            "tesslate_response": output_response_field, "framework": framework_field, "input_question": input_question_field
-        }
-        actual_field_names = {}
-        missing_fields = []
-        for key, default_name in required_fields_map.items():
-            if default_name in reader.fieldnames:
-                actual_field_names[key] = default_name
-            else:
-                generic_names = {"output_response": "output_tesslate_response", "metadata_framework": "framework", "input_question": "input_question"}
-                if key in generic_names and generic_names[key] in reader.fieldnames:
-                    actual_field_names[key] = generic_names[key]
-                else:
-                    missing_fields.append(default_name)
-        if missing_fields:
-            raise ValueError(f"Missing required CSV fields: {', '.join(missing_fields)}. Available: {', '.join(reader.fieldnames or [])}")
-
         for i, row in enumerate(reader):
-            tesslate_response = row.get(actual_field_names["tesslate_response"], '')
-            framework = row.get(actual_field_names["framework"], '')
-            input_question = row.get(actual_field_names["input_question"], f"CSV row {i+1}: No input question")
+            tesslate_response = row.get(output_response_field, '')
+            framework = row.get(framework_field, '')
+            input_question = row.get(input_question_field, f"CSV row {i+1}: No input question")
             if framework == 'Nextjs' and '<Edit filename="' in tesslate_response:
                 test_cases.append((f"site_{i}", tesslate_response, input_question))
     
@@ -116,13 +102,23 @@ def load_test_data(csv_filepath=None):
 @pytest.fixture(scope="session")
 def golden_template_dir(tmp_path_factory):
     """
-    PERFORMANCE: Creates a "golden image" of the Next.js template ONCE per test session.
+    PERFORMANCE: Creates a "golden image" which is a full local git repository
+    with node_modules pre-installed. This is done ONCE per test session.
     """
     golden_dir_base = tmp_path_factory.mktemp("golden_template_base")
     print(f"\n[{time.strftime('%H:%M:%S')}] Creating golden template in {golden_dir_base} for the session...")
-    template_path = create_golden_template(str(golden_dir_base))
-    if not template_path:
-        pytest.fail("Failed to create the golden template. Cannot proceed with tests.")
+    
+    try:
+        # Assuming gen_site_logic.py has a working create_golden_template function
+        from gen_site_logic import create_golden_template
+        template_path = create_golden_template(str(golden_dir_base), NEXTJS_REPO_URL)
+        if not template_path:
+             pytest.fail("Failed to create the golden template using gen_site_logic.create_golden_template.")
+    except ImportError:
+        pytest.fail("Error: 'create_golden_template' not found in 'gen_site_logic'. Please ensure it's defined and imported correctly.")
+    except Exception as e:
+        pytest.fail(f"An error occurred during golden template creation: {e}")
+
     print(f"[{time.strftime('%H:%M:%S')}] Golden template created successfully at {template_path}")
     yield template_path
 
@@ -130,28 +126,55 @@ def golden_template_dir(tmp_path_factory):
 @pytest.fixture(scope="function", params=load_test_data())
 def site_data_and_tmp_dir(tmp_path_factory, request, golden_template_dir):
     """
-    PERFORMANCE: Uses `cp -a` to quickly create a test environment. This preserves
-    pnpm's hard links for node_modules, saving massive amounts of disk space and time.
+    PERFORMANCE: Uses `git clone` from the local golden template.
+    Also handles automatic cleanup of the test directory, preserving it on failure.
     """
     site_identifier, tesslate_response_content, input_question = request.param
     test_run_dir = tmp_path_factory.mktemp(f"test_run_{site_identifier.replace('/', '_')}")
-    
-    # The destination path for the copy
     site_build_path = os.path.join(test_run_dir, f"site_{site_identifier.replace('/', '_')}")
 
-    print(f"[{time.strftime('%H:%M:%S')}] Copying golden template to {site_build_path} with `cp -a` for {site_identifier}...")
-    
-    # Use the system's `cp -a` command for an efficient, link-preserving copy.
-    # This is the key change for performance and disk usage.
+    print(f"[{time.strftime('%H:%M:%S')}] Cloning local golden template to {site_build_path} for test {site_identifier}...")
     try:
-        subprocess.run(['cp', '-a', golden_template_dir, site_build_path], check=True, capture_output=True)
+        subprocess.run(['git', 'clone', golden_template_dir, site_build_path], check=True, capture_output=True)
+        git_dir_path = os.path.join(site_build_path, ".git")
+        if os.path.exists(git_dir_path):
+            shutil.rmtree(git_dir_path)
     except subprocess.CalledProcessError as e:
-        pytest.fail(f"Failed to copy golden template using 'cp -a'. Stderr: {e.stderr.decode()}")
+        pytest.fail(f"Failed to clone local golden template. Stderr: {e.stderr.decode()}")
     except FileNotFoundError:
-        pytest.fail("'cp' command not found. This optimization requires a UNIX-like environment (Linux, macOS).")
+        pytest.fail("'git' command not found.")
 
-    print(f"[{time.strftime('%H:%M:%S')}] Copy complete for {site_identifier}.")
-    yield str(site_build_path), tesslate_response_content, input_question, site_identifier
+    print(f"[{time.strftime('%H:%M:%S')}] Local clone complete for {site_identifier}.")
+    
+    active_subprocesses = [] 
+
+    # Yield control to the test function
+    yield str(site_build_path), tesslate_response_content, input_question, site_identifier, active_subprocesses
+    
+    # --- POST-TEST CLEANUP (Executed after the test function returns) ---
+    print(f"\n[{time.strftime('%H:%M:%S')}] Initiating cleanup for test: '{site_identifier}'")
+
+    for proc in active_subprocesses:
+        if proc.poll() is None:
+            print(f"[{time.strftime('%H:%M:%S')}] Terminating lingering process (PID: {proc.pid})...")
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                print(f"[{time.strftime('%H:%M:%S')}] Process {proc.pid} did not terminate gracefully, killing.")
+                proc.kill()
+                proc.wait(timeout=5)
+
+    # CORRECTED and MORE ROBUST CLEANUP LOGIC
+    # This logic uses the 'rep_call' attribute set by the hook in conftest.py
+    # to determine if the test failed, and preserves the directory in that case.
+    test_failed = not hasattr(request.node, 'rep_call') or request.node.rep_call.failed
+
+    if not test_failed:
+        print(f"[{time.strftime('%H:%M:%S')}] Test '{site_identifier}' PASSED. Cleaning up directory {test_run_dir}...")
+        shutil.rmtree(test_run_dir, ignore_errors=True)
+    else:
+        print(f"[{time.strftime('%H:%M:%S')}] Test '{site_identifier}' FAILED. Directory PRESERVED for analysis at: {test_run_dir}")
 
 
 def wait_for_nextjs_server(url, timeout=180, poll_interval=3):
@@ -220,7 +243,7 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
     """
     Main test function that orchestrates the entire validation process for a single generated site.
     """
-    actual_site_directory, tesslate_response_content, input_question, site_identifier = site_data_and_tmp_dir
+    actual_site_directory, tesslate_response_content, input_question, site_identifier, active_subprocesses = site_data_and_tmp_dir
     
     run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
@@ -236,6 +259,8 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
         allure.attach(tesslate_response_content, name="LLM Response", attachment_type=allure.attachment_type.TEXT)
         allure.attach(f"Site Identifier: {site_identifier}\nDirectory: {actual_site_directory}", name="Site Generation Metadata", attachment_type=allure.attachment_type.TEXT)
 
+    # --- THIS IS THE PRIMARY FIX FOR THE TypeError ---
+    # The 'site_identifier' argument was missing. It is now passed.
     results = process_generated_site(tesslate_response_content, actual_site_directory, site_identifier)
     
     allure.attach(json.dumps(results, indent=2, default=lambda o: '<not serializable>'), 
@@ -318,8 +343,10 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                 dev_server_process = subprocess.Popen(
                    ["pnpm", "dev", "-p", str(port)], cwd=actual_site_directory, stdout=subprocess.PIPE, stderr=subprocess.PIPE, 
                     env={**os.environ, "PORT": str(port)},
-                    text=True, bufsize=1, creationflags=0
+                    text=True, bufsize=1, creationflags=0 if os.name != 'nt' else subprocess.CREATE_NEW_PROCESS_GROUP
                 )
+                active_subprocesses.append(dev_server_process)
+                
                 wait_for_nextjs_server(server_url, timeout=180)
             
                 browser = playwright.chromium.launch(headless=True)
@@ -384,15 +411,15 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                     pass
             raise 
         finally:
+            if context:
+                try: context.close()
+                except Exception as e_ctx_media_close: print(f"Error closing playwright context: {e_ctx_media_close}")
+            if browser:
+                try: browser.close()
+                except Exception as e_brw_close: print(f"Error closing playwright browser: {e_brw_close}")
+
             if RECORD_VIDEO and actual_site_directory and os.path.isdir(output_media_dir):
                 with allure.step("Process Recorded Media"):
-                    if context:
-                        try:
-                            context.close()
-                            context_closed_for_media = True
-                        except Exception as e_ctx_media_close:
-                            print(f"Error closing context for media: {e_ctx_media_close}")
-                    
                     recorded_videos_list = glob.glob(os.path.join(output_media_dir, "*.webm"))
                     if recorded_videos_list:
                         recorded_video_path = recorded_videos_list[0]
@@ -402,29 +429,3 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
                             allure.attach.file(gif_output_path, name=f"Animation GIF", attachment_type=allure.attachment_type.GIF)
                     else:
                         allure.attach("No video file found for processing.", name="Media Processing Note", attachment_type=allure.attachment_type.TEXT)
-            else:
-                 if context: # Always try to close context
-                    try:
-                        if not context_closed_for_media:
-                            context.close()
-                    except Exception as e_ctx_final_close:
-                        print(f"Error during final context close: {e_ctx_final_close}")
-
-            with allure.step("Cleanup Browser & Dev Server"):
-                # Simplified cleanup: context is already handled above
-                if browser:
-                    try: browser.close()
-                    except Exception as e_brw_close: print(f"Error closing browser: {e_brw_close}")
-                
-                if dev_server_process and dev_server_process.poll() is None:
-                    dev_server_process.terminate()
-                    try:
-                        stdout, stderr = dev_server_process.communicate(timeout=10)
-                        log_content = []
-                        if stdout and stdout.strip(): log_content.append(f"STDOUT:\n{stdout.strip()}")
-                        if stderr and stderr.strip(): log_content.append(f"STDERR:\n{stderr.strip()}")
-                        if log_content: allure.attach("\n\n".join(log_content), name="Dev Server Output (on cleanup)", attachment_type=allure.attachment_type.TEXT)
-                    except subprocess.TimeoutExpired:
-                        dev_server_process.kill()
-                    except Exception as e_comm:
-                         print(f"Error communicating with dev server process on terminate: {e_comm}")

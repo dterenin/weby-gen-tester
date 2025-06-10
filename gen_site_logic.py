@@ -7,10 +7,6 @@ import shutil
 import time
 import sys
 
-# --- Configuration ---
-NEXTJS_GITHUB_EXAMPLE_URL = "https://github.com/dterenin/weby-nextjs-template"
-
-# --- Helper Functions ---
 def _create_file_with_content(filepath: str, content: str, results_dict: dict, file_description: str):
     """Helper function to create a file with given content."""
     try:
@@ -36,7 +32,7 @@ def _run_command_util(cmd_list, cwd, results_dict, timeout=120, check_on_error=T
         env["PATH"] = os.path.join(cwd, "node_modules", ".bin") + os.pathsep + env.get("PATH", "")
         
         # Set a longer timeout for the initial, full pnpm install
-        effective_timeout = 360 if command_name == "pnpm Install (template)" else timeout
+        effective_timeout = 360 if "pnpm Install" in command_name else timeout
 
         process = subprocess.run(
             cmd_list, cwd=cwd, capture_output=True,
@@ -70,34 +66,38 @@ def _run_command_util(cmd_list, cwd, results_dict, timeout=120, check_on_error=T
 
 # --- Core Logic Functions ---
 
-def create_golden_template(base_tmp_dir: str) -> str | None:
+def create_golden_template(base_tmp_dir: str, repo_url: str) -> str | None:
     """
     PERFORMANCE: Clones the template and installs dependencies ONCE per session.
-    Returns the path to the fully prepared "golden image" directory.
+    IMPORTANT: It leaves the .git directory intact to enable fast local clones.
     """
     project_folder_name = "nextjs_golden_template"
     project_path = os.path.join(base_tmp_dir, project_folder_name)
-    results = {}  # Temporary results dict for this setup phase
+    results = {}
 
-    if not NEXTJS_GITHUB_EXAMPLE_URL:
-        print(f"FATAL: NEXTJS_GITHUB_EXAMPLE_URL is not configured.")
+    if not repo_url:
+        print(f"FATAL: Repository URL is not configured.")
         return None
 
     if os.path.exists(project_path):
         shutil.rmtree(project_path)
     os.makedirs(base_tmp_dir, exist_ok=True)
 
+    # Clone the repository from the remote URL. We do a full clone (no --depth)
+    # as this is generally better for subsequent local cloning.
     clone_success = _run_command_util(
-        ['git', 'clone', '--depth', '1', NEXTJS_GITHUB_EXAMPLE_URL, project_folder_name],
-        cwd=base_tmp_dir, results_dict=results, command_name="Clone Next.js Template"
+        ['git', 'clone', repo_url, project_path],
+        cwd=base_tmp_dir, results_dict=results, command_name="Clone Remote Template"
     )
     if not clone_success: return None
     
-    # Remove .git directory to prevent nested repository issues
-    git_dir_path = os.path.join(project_path, ".git")
-    if os.path.exists(git_dir_path):
-        shutil.rmtree(git_dir_path)
+    # --- KEY CHANGE: DO NOT REMOVE the .git directory ---
+    # The .git directory is required for fast local cloning.
+    # git_dir_path = os.path.join(project_path, ".git")
+    # if os.path.exists(git_dir_path):
+    #     shutil.rmtree(git_dir_path)
 
+    # Install dependencies using pnpm, which will create a link-based node_modules
     install_success = _run_command_util(
         ['pnpm', 'install', '--strict-peer-dependencies=false'],
         cwd=project_path, results_dict=results, command_name="pnpm Install (template)"

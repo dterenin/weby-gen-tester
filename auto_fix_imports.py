@@ -3,8 +3,8 @@
 Hybrid Auto-Fix Utility (Orchestrator) - OPTIMIZED
 
 - Reads a list of specific files to process from command-line arguments.
-- If no files are provided, it falls back to scanning the entire directory.
-- This avoids analyzing dozens of static template files on every run.
+- Pre-processes files with simple text-based fixes (markdown, 'use client').
+- Invokes the powerful TypeScript fixer for all complex import-related issues.
 """
 
 import sys
@@ -51,34 +51,35 @@ class HybridAutoFixer:
         return "\n".join(lines)
 
     def preprocess_file(self, file_path: Path) -> bool:
-        """Runs a series of text-based fixes on a single file."""
+        """Runs a series of simple, safe text-based fixes on a single file."""
         try:
             original_content = file_path.read_text(encoding="utf-8")
             content = original_content
             was_changed = False
 
-            # Step 1: Strip Markdown
+            # Step 1: Strip Markdown from LLM-generated code.
             content, stripped = self._strip_markdown_fences(content)
-            if stripped: print(f"  - Stripped Markdown from {file_path.name}"); was_changed = True
+            if stripped: 
+                print(f"  - Stripped Markdown from {file_path.name}")
+                was_changed = True
 
-            # Step 2: Brute-force fix for common default import mistakes for Header/Footer
-            new_content = re.sub(r'import\s+\{\s*Header\s*\}\s+from\s+(["\'].*?header["\']);?', r'import Header from \1;', content)
-            if new_content != content: print(f"  - Corrected Header import in {file_path.name}"); content = new_content; was_changed = True
+            # --- REMOVED ---
+            # The brute-force regex fix for Header/Footer is no longer needed.
+            # The new, intelligent auto_fixer.ts handles default and named imports correctly.
 
-            new_content = re.sub(r'import\s+\{\s*Footer\s*\}\s+from\s+(["\'].*?footer["\']);?', r'import Footer from \1;', content)
-            if new_content != content: print(f"  - Corrected Footer import in {file_path.name}"); content = new_content; was_changed = True
-
-            # Step 3: Add "use client" if needed
+            # Step 2 (was 3): Add "use client" directive if needed.
             if self._needs_use_client(content):
                 content = self._add_use_client(content)
-                print(f"  - Added 'use client' to {file_path.name}"); was_changed = True
+                print(f"  - Added 'use client' to {file_path.name}")
+                was_changed = True
 
             if was_changed:
                 file_path.write_text(content, encoding="utf-8")
             
             return was_changed
         except Exception as e:
-            print(f"  - ❌ Error preprocessing {file_path.name}: {e}"); return False
+            print(f"  - ❌ Error preprocessing {file_path.name}: {e}")
+            return False
 
     def process_directory(self, directory_path: str, specific_files: Optional[List[str]] = None):
         """Orchestrates the fixing process for a given directory."""
@@ -105,20 +106,15 @@ class HybridAutoFixer:
 
         print("\n🤖 [Python] Stage 2: Invoking TypeScript fixer for deep analysis...")
         
-        # --- FIX ---
-        # We call `pnpm exec` to find `ts-node` in the local node_modules,
-        # then pass the script and arguments directly. This avoids issues with
-        # `pnpm run` and its `--` separator.
         script_cwd = Path(__file__).parent.resolve()
         ts_fixer_script_path = script_cwd / "auto_fixer.ts"
 
         command = [
             "pnpm", "exec", "ts-node", str(ts_fixer_script_path),
-            directory_path  # First argument for the TS script
-        ] + [str(p.resolve()) for p in files_to_process]  # The rest of the arguments
+            directory_path
+        ] + [str(p.resolve()) for p in files_to_process]
 
         try:
-            # Run from the directory where this Python script (and its package.json) lives
             process = subprocess.run(command, capture_output=True, text=True, check=True, encoding='utf-8', cwd=script_cwd)
             print("🤖 [Python] TypeScript fixer output:", process.stdout, sep='\n')
             if process.stderr: print("🤖 [Python] TypeScript fixer warnings:", process.stderr, sep='\n')
@@ -127,7 +123,7 @@ class HybridAutoFixer:
             print("❌ Error: `pnpm` command not found.")
         except subprocess.CalledProcessError as e:
             print("❌ Error: The TypeScript fixer script failed.", "--- STDOUT ---", e.stdout, "--- STDERR ---", e.stderr, sep='\n')
-            sys.exit(1) # Exit with an error code to signal failure to the caller
+            sys.exit(1)
         except Exception as e:
             print(f"❌ An unexpected error occurred: {e}")
             sys.exit(1)
