@@ -64,8 +64,25 @@ function buildExportMap(project: Project) {
 
   project.getSourceFiles().forEach(sourceFile => {
     if (sourceFile.getFilePath().includes("/node_modules/") || sourceFile.isDeclarationFile()) return;
-    const relativePath = path.relative(project.getRootDirectories()[0].getPath(), sourceFile.getFilePath()).replace(/\.(ts|tsx)$/, '');
+    
+    const filePath = sourceFile.getFilePath();
+    console.log(`    - Checking file: ${filePath}`);
+    
+    // Check if file is in src directory (more robust check)
+    if (!filePath.includes('/src/')) {
+      console.log(`    - Skipping file outside src: ${filePath}`);
+      return;
+    }
+    
+    // Calculate relative path from src directory
+    const srcIndex = filePath.indexOf('/src/');
+    const relativePath = filePath.substring(srcIndex + 5).replace(/\.(ts|tsx)$/, '').replace(/\\/g, '/');
     const moduleSpecifier = `@/${relativePath.replace(/\/index$/, '')}`;
+    
+    console.log(`    - Processing file: ${filePath}`);
+    console.log(`    - Module specifier: ${moduleSpecifier}`);
+    
+    // Handle default exports
     const defaultExportSymbol = sourceFile.getDefaultExportSymbol();
     if (defaultExportSymbol) {
       let exportName = defaultExportSymbol.getAliasedSymbol()?.getName() ?? defaultExportSymbol.getName();
@@ -73,14 +90,27 @@ function buildExportMap(project: Project) {
         const baseName = sourceFile.getBaseNameWithoutExtension();
         exportName = (baseName !== 'index') ? (baseName.charAt(0).toUpperCase() + baseName.slice(1)) : (path.basename(path.dirname(sourceFile.getFilePath())).charAt(0).toUpperCase() + path.basename(path.dirname(sourceFile.getFilePath())).slice(1));
       }
-      if (!exportMap.has(exportName)) exportMap.set(exportName, { path: moduleSpecifier, isDefault: true });
+      if (!exportMap.has(exportName)) {
+        exportMap.set(exportName, { path: moduleSpecifier, isDefault: true });
+        console.log(`    - Added default export: ${exportName}`);
+      }
     }
-    sourceFile.getExportSymbols().forEach(symbol => {
+    
+    // Handle named exports
+    const exportSymbols = sourceFile.getExportSymbols();
+    exportSymbols.forEach(symbol => {
       const name = symbol.getName();
-      if (name !== "default" && !exportMap.has(name)) exportMap.set(name, { path: moduleSpecifier, isDefault: false });
+      if (name !== "default" && !exportMap.has(name)) {
+        exportMap.set(name, { path: moduleSpecifier, isDefault: false });
+        console.log(`    - Added named export: ${name}`);
+      }
     });
   });
+  
   console.log(`  - [Pass 2] Export map built. Found ${exportMap.size} unique potential imports.`);
+  if (exportMap.size === 0) {
+    console.log(`  - [Pass 2] WARNING: No exports found! This might indicate a problem with file indexing.`);
+  }
 }
 
 /**
@@ -99,6 +129,8 @@ function fixImportsBasedOnDiagnostics(sourceFile: SourceFile) {
   for (const diagnostic of diagnostics) {
     const code = diagnostic.getCode();
     const messageText = diagnostic.getMessageText();
+    
+    console.log(`    - Processing diagnostic ${code}: ${messageText}`);
     
     // CASE 1: `Module '...' has no default export. Did you mean 'import { ... } from ...'?`
     if (code === 2613 && typeof messageText === 'string') {
@@ -130,6 +162,8 @@ function fixImportsBasedOnDiagnostics(sourceFile: SourceFile) {
         const match = messageText.match(/'([^']+)'/);
         if (match) {
             const importName = match[1];
+            console.log(`    - Looking for missing import: ${importName}`);
+            
             if (importName === 'cn') {
                 console.log(`    - 🎯 Adding special case: 'cn' from '@/lib/utils' (TS2304).`);
                 sourceFile.addImportDeclaration({ moduleSpecifier: '@/lib/utils', namedImports: ['cn'] });
@@ -139,11 +173,36 @@ function fixImportsBasedOnDiagnostics(sourceFile: SourceFile) {
 
             const exportInfo = exportMap.get(importName);
             if (exportInfo) {
-                console.log(`    - ✅ Adding missing import for '${importName}' (TS2304).`);
+                console.log(`    - ✅ Adding missing import for '${importName}' from '${exportInfo.path}' (TS2304).`);
                 const newImport = sourceFile.addImportDeclaration({ moduleSpecifier: exportInfo.path });
                 if (exportInfo.isDefault) newImport.setDefaultImport(importName);
                 else newImport.addNamedImport(importName);
                 changesMade = true;
+            } else {
+                console.log(`    - ❌ Could not find export for '${importName}' in export map.`);
+            }
+        }
+    }
+
+    // CASE 3: `Module '...' or its corresponding type declarations cannot be found`
+    if (code === 2307 && typeof messageText === 'string') {
+        const match = messageText.match(/Module '([^']+)'/);
+        if (match) {
+            const modulePath = match[1];
+            console.log(`    - 🔍 Found module resolution error for '${modulePath}' (TS2307).`);
+            
+            // Check if it's a malformed @/ path
+            if (modulePath.includes('@/../')) {
+                const correctedPath = modulePath.replace('@/../', '@/');
+                const importDeclaration = sourceFile.getImportDeclaration(d => 
+                    d.getModuleSpecifier().getLiteralValue() === modulePath
+                );
+                
+                if (importDeclaration) {
+                    console.log(`    - 🛠️  Fixing malformed path '${modulePath}' to '${correctedPath}' (TS2307).`);
+                    importDeclaration.setModuleSpecifier(correctedPath);
+                    changesMade = true;
+                }
             }
         }
     }
@@ -168,6 +227,8 @@ async function fixProject(projectPath: string, specificFilePaths: string[]): Pro
   console.log(`🤖 [TS] Indexing all source files in ${srcDir}...`);
   project.addSourceFilesAtPaths(`${srcDir}/**/*.{ts,tsx}`);
   
+  console.log(`🤖 [TS] Found ${project.getSourceFiles().length} source files.`);
+  
   // --- PASS 1: Proactively refactor key components to use named exports ---
   enforceNamedExports(project);
 
@@ -175,7 +236,10 @@ async function fixProject(projectPath: string, specificFilePaths: string[]): Pro
   buildExportMap(project);
   
   // --- PASS 3: Fix all import errors in the target files based on diagnostics ---
-  const sourceFilesToFix = specificFilePaths.map(filePath => project.getSourceFileOrThrow(filePath));
+  const sourceFilesToFix = specificFilePaths.length > 0 
+    ? specificFilePaths.map(filePath => project.getSourceFileOrThrow(filePath))
+    : project.getSourceFiles().filter(sf => !sf.getFilePath().includes('/node_modules/') && !sf.isDeclarationFile());
+    
   for (const sourceFile of sourceFilesToFix) {
     fixImportsBasedOnDiagnostics(sourceFile);
   }
