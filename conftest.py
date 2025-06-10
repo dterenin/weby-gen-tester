@@ -28,11 +28,34 @@ def pytest_addoption(parser):
     )
 
 @pytest.fixture(scope="session", autouse=True)
-def global_test_context(request):
+def session_cleanup(request):
     """
-    A global pytest fixture that makes the pytest config accessible
-    to functions that run during test collection (like load_test_data)
-    and handles session-level setup and teardown.
+    Ensures a clean slate for every test session by deleting and recreating
+    the --basetemp directory before any tests run.
+    This fixture is now the foundational step for the session.
+    """
+    # This check ensures the cleanup code runs only on the master node, not on workers
+    if not hasattr(request.config, "workerinput"):
+        basetemp = request.config.getoption("basetemp", None)
+        
+        if basetemp:
+            print(f"\nINFO: Pre-run cleanup: Deleting and recreating basetemp directory: {basetemp}")
+            # Use ignore_errors=True to prevent crash if dir is in use or doesn't exist
+            shutil.rmtree(basetemp, ignore_errors=True)
+            try:
+                os.makedirs(basetemp)
+            except OSError as e:
+                # This can happen in a race condition if another process is faster, but it's okay.
+                print(f"Warning: Could not recreate basetemp dir, it might already exist: {e}")
+    
+    # Yield control to the test session
+    yield
+
+@pytest.fixture(scope="session", autouse=True)
+def global_test_context(request, session_cleanup):
+    """
+    This fixture now explicitly depends on 'session_cleanup', guaranteeing
+    it runs AFTER the temporary directory has been cleaned.
     """
     class GlobalConfig:
         def __init__(self, config):
@@ -41,10 +64,8 @@ def global_test_context(request):
         def getoption(self, option_name):
             return self.config.getoption(option_name)
 
-    # Attach the config to a pytest attribute for easy access
     pytest.global_test_context = GlobalConfig(request.config)
     
-    # Create environment.properties for Allure report
     allure_results_dir = request.config.getoption("--alluredir") or "allure-results"
     if not os.path.exists(allure_results_dir):
         os.makedirs(allure_results_dir)
@@ -59,7 +80,6 @@ def global_test_context(request):
     
     yield
     
-    # Clean up the attribute after the test session completes
     if hasattr(pytest, 'global_test_context'):
         delattr(pytest, 'global_test_context')
 
@@ -67,27 +87,18 @@ def global_test_context(request):
 def pytest_runtest_makereport(item, call):
     """
     Hook to access the test outcome in fixtures.
-    This is executed for each test phase (setup, call, teardown) and is
-    essential for the automatic cleanup logic.
     """
-    # Execute all other hooks to obtain the report object
     outcome = yield
     rep = outcome.get_result()
-
-    # Store the report outcome in the test item node for each phase.
-    # This creates attributes on the test item like `rep_setup`, `rep_call`, `rep_teardown`.
     setattr(item, "rep_" + rep.when, rep)
 
 @pytest.fixture(scope="session", autouse=True)
-def worker_id_setup(request):
+def worker_id_setup(request, session_cleanup):
     """
-    Makes the xdist worker ID available to other fixtures.
-    This is necessary for creating per-worker golden templates.
+    This fixture also depends on 'session_cleanup' to ensure it runs
+    after the environment is clean.
     """
-    # The 'workerinput' attribute is only present when running under pytest-xdist.
     if hasattr(request.config, "workerinput"):
-        # e.g., "gw0", "gw1", etc.
         pytest.worker_id = request.config.workerinput["workerid"]
     else:
-        # For non-parallel runs
         pytest.worker_id = "master"
