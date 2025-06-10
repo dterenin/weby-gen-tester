@@ -77,3 +77,17 @@ def pytest_runtest_makereport(item, call):
     # Store the report outcome in the test item node for each phase.
     # This creates attributes on the test item like `rep_setup`, `rep_call`, `rep_teardown`.
     setattr(item, "rep_" + rep.when, rep)
+
+@pytest.fixture(scope="session", autouse=True)
+def worker_id_setup(request):
+    """
+    Makes the xdist worker ID available to other fixtures.
+    This is necessary for creating per-worker golden templates.
+    """
+    # The 'workerinput' attribute is only present when running under pytest-xdist.
+    if hasattr(request.config, "workerinput"):
+        # e.g., "gw0", "gw1", etc.
+        pytest.worker_id = request.config.workerinput["workerid"]
+    else:
+        # For non-parallel runs
+        pytest.worker_id = "master"

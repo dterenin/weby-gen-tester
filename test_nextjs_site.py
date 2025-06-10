@@ -102,24 +102,29 @@ def load_test_data(csv_filepath=None):
 @pytest.fixture(scope="session")
 def golden_template_dir(tmp_path_factory):
     """
-    PERFORMANCE: Creates a "golden image" which is a full local git repository
-    with node_modules pre-installed. This is done ONCE per test session.
+    PERFORMANCE: Creates a "golden image" for EACH pytest-xdist worker.
+    This is done ONCE per worker at the start of the session to avoid I/O bottlenecks.
     """
-    golden_dir_base = tmp_path_factory.mktemp("golden_template_base")
-    print(f"\n[{time.strftime('%H:%M:%S')}] Creating golden template in {golden_dir_base} for the session...")
+    # Get the unique worker ID. For a non-parallel run, it will be "master".
+    # This is the key to creating a separate template for each parallel process.
+    worker_id = getattr(pytest, "worker_id", "master")
+    
+    # Create a unique base directory for this specific worker's template.
+    golden_dir_base = tmp_path_factory.mktemp(f"golden_template_{worker_id}")
+    
+    print(f"\n[{time.strftime('%H:%M:%S')}] [Worker: {worker_id}] Creating golden template in {golden_dir_base}...")
     
     try:
-        # Assuming gen_site_logic.py has a working create_golden_template function
         from gen_site_logic import create_golden_template
         template_path = create_golden_template(str(golden_dir_base), NEXTJS_REPO_URL)
         if not template_path:
-             pytest.fail("Failed to create the golden template using gen_site_logic.create_golden_template.")
+             pytest.fail(f"[Worker: {worker_id}] Failed to create the golden template.")
     except ImportError:
-        pytest.fail("Error: 'create_golden_template' not found in 'gen_site_logic'. Please ensure it's defined and imported correctly.")
+        pytest.fail(f"[Worker: {worker_id}] Error: 'create_golden_template' not found in 'gen_site_logic'.")
     except Exception as e:
-        pytest.fail(f"An error occurred during golden template creation: {e}")
+        pytest.fail(f"[Worker: {worker_id}] An error occurred during golden template creation: {e}")
 
-    print(f"[{time.strftime('%H:%M:%S')}] Golden template created successfully at {template_path}")
+    print(f"[{time.strftime('%H:%M:%S')}] [Worker: {worker_id}] Golden template created successfully at {template_path}")
     yield template_path
 
 
