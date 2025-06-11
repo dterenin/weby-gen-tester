@@ -1,9 +1,90 @@
-// auto_fixer.ts
+// auto_fixer.ts - Complete TypeScript solution replacing auto_fix_imports.py
 import { Project, SourceFile, Node, ImportDeclaration, SyntaxKind, ts, Identifier } from "ts-morph";
 import path from "node:path";
+import fs from "node:fs";
 
 // A map to store all available exports in the project.
 const exportMap = new Map<string, { path: string; isDefault: boolean }>();
+
+/**
+ * Pre-processing functions migrated from Python script
+ */
+function stripMarkdownFences(content: string): { content: string; wasChanged: boolean } {
+  const lines = content.split('\n');
+  if (!lines.length) return { content, wasChanged: false };
+  
+  const fenceIndices = lines
+    .map((line, i) => line.trim().startsWith('```') ? i : -1)
+    .filter(i => i !== -1);
+    
+  if (fenceIndices.length >= 2 && fenceIndices[0] < fenceIndices[fenceIndices.length - 1]) {
+    const cleanedLines = lines.slice(fenceIndices[0] + 1, fenceIndices[fenceIndices.length - 1]);
+    return { content: cleanedLines.join('\n'), wasChanged: true };
+  }
+  return { content, wasChanged: false };
+}
+
+function needsUseClient(content: string): boolean {
+  if (/^["']use client["'];?\s*$/m.test(content.trim())) return false;
+  
+  const clientIndicators = [
+    /\buseState\s*\(/,
+    /\buseEffect\s*\(/,
+    /\bonClick\s*=/,
+    /react-hot-toast/,
+    /sonner/,
+    /@dnd-kit/,
+    /embla-carousel-react/,
+    /recharts/,
+    /cmdk/,
+    /input-otp/,
+    /react-day-picker/,
+    /react-hook-form/,
+    /next-themes/,
+    /vaul/
+  ];
+  
+  return clientIndicators.some(pattern => pattern.test(content));
+}
+
+function addUseClient(content: string): string {
+  const lines = content.split('\n');
+  const startIndex = lines.length > 0 && lines[0].startsWith('#!') ? 1 : 0;
+  lines.splice(startIndex, 0, '"use client";');
+  return lines.join('\n');
+}
+
+function preprocessFile(filePath: string): boolean {
+  try {
+    const originalContent = fs.readFileSync(filePath, 'utf-8');
+    let content = originalContent;
+    let wasChanged = false;
+
+    // Strip Markdown fences
+    const { content: strippedContent, wasChanged: stripped } = stripMarkdownFences(content);
+    if (stripped) {
+      content = strippedContent;
+      wasChanged = true;
+      console.log(`  - Stripped Markdown from ${path.basename(filePath)}`);
+    }
+
+    // Add "use client" if needed
+    if (needsUseClient(content)) {
+      content = addUseClient(content);
+      wasChanged = true;
+      console.log(`  - Added 'use client' to ${path.basename(filePath)}`);
+    }
+
+    if (wasChanged) {
+      fs.writeFileSync(filePath, content, 'utf-8');
+    }
+
+    return wasChanged;
+  } catch (error) {
+    console.log(`  - ❌ Error preprocessing ${path.basename(filePath)}: ${error}`);
+    return false;
+  }
+}
 
 /**
  * Pass 1: Proactively refactors key components (like Header/Footer/Hero) to use named exports.
@@ -305,9 +386,50 @@ function fixImportExportMismatch(project: Project, importName: string, modulePat
 
 /**
  * Main function that orchestrates the entire code fixing process.
+ * Now includes pre-processing from the Python script.
  */
 async function fixProject(projectPath: string, specificFilePaths: string[], buildOutput?: string): Promise<void> {
-  console.log("🤖 [TS] Initializing TypeScript project...");
+  console.log("🚀 Starting Hybrid Auto-Fix for TypeScript project...");
+  
+  // --- STAGE 1: Pre-processing (from Python script) ---
+  console.log("\n🐍 [TS] Stage 1: Running text-based pre-processing...");
+  let preprocessedCount = 0;
+  
+  const filesToProcess = specificFilePaths.length > 0 
+    ? specificFilePaths 
+    : [];
+    
+  if (filesToProcess.length === 0) {
+    // Scan for files if none specified
+    const srcDir = path.join(projectPath, 'src');
+    const extensions = ['**/*.js', '**/*.jsx', '**/*.ts', '**/*.tsx'];
+    
+    try {
+      const glob = require('glob');
+      for (const ext of extensions) {
+        const files = glob.sync(path.join(srcDir, ext));
+        filesToProcess.push(...files.filter((f: string) => !f.includes('node_modules')));
+      }
+    } catch (error) {
+      console.log("Warning: glob not available, processing specific files only");
+    }
+  }
+  
+  for (const filePath of filesToProcess) {
+    if (preprocessFile(filePath)) {
+      preprocessedCount++;
+    }
+  }
+  
+  console.log(`🐍 [TS] Pre-processing complete. ${preprocessedCount} files modified.`);
+  
+  if (filesToProcess.length === 0) {
+    console.log("✅ No files to process. Exiting.");
+    return;
+  }
+  
+  // --- STAGE 2: TypeScript AST-based fixing ---
+  console.log("\n🤖 [TS] Stage 2: Initializing TypeScript project...");
   const project = new Project({
     tsConfigFilePath: path.join(projectPath, "tsconfig.json"),
     skipAddingFilesFromTsConfig: true,
@@ -345,7 +467,7 @@ async function fixProject(projectPath: string, specificFilePaths: string[], buil
 
   console.log("🤖 [TS] Saving all changes...");
   await project.save();
-  console.log("🤖 [TS] Code fixing complete!");
+  console.log("✅ Hybrid Auto-Fix complete!");
 }
 
 // --- Main execution block ---
