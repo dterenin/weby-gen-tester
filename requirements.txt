@@ -1,5 +1,24 @@
+# llmaaj
+pandas==2.1.4
+numpy>=1.24.0,<1.27.0
+pyarrow==14.0.1
+python-dotenv==1.0.0
+opentelemetry-api==1.33.0
+opentelemetry-sdk==1.33.0
+opentelemetry-exporter-otlp-proto-http==1.33.0
+datasets==2.14.5
+aiohttp
+nest-asyncio
+arize-phoenix==9.2.0
+huggingface_hub
+
+# tests
+allure-pytest
 pytest
+pytest-assume
+pytest-playwright
+pytest-xdist
 playwright
 requests
-allure-pytest
-pytest-assume
+streamlit
+streamlit_autorefresh
