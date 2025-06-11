@@ -277,6 +277,7 @@ def test_generated_nextjs_site(site_data_and_tmp_dir, playwright: Playwright):
     
     stage_to_success_key_map = {
         "Apply LLM Code": "llm_files_write_success",
+
         "Auto Fix (Project-wide)": "auto_fix_success",
         "pnpm Install": "pnpm_install_success",
         "ESLint Fix": "eslint_fix_success_optional", 

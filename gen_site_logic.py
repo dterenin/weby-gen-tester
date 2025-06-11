@@ -7,6 +7,7 @@ import shutil
 import time
 import sys
 
+
 def _create_file_with_content(filepath: str, content: str, results_dict: dict, file_description: str):
     """Helper function to create a file with given content."""
     try:
@@ -123,6 +124,7 @@ def process_generated_site(tesslate_response_content: str, project_final_path: s
     results["project_setup_stages"].append(stage_name_llm_apply)
     results["llm_files_write_success"] = True
     edit_blocks = re.findall(r'<Edit filename="(.*?)">([\s\S]*?)<\/Edit>', tesslate_response_content)
+
     
     llm_modified_files = [] # PERFORMANCE: Collect paths of modified files
 
