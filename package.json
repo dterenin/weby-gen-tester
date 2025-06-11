@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Tools for autofixing TS/JS code.",
   "private": true,
+  "type": "module",
   "scripts": {
     "fix": "ts-node auto_fixer.ts",
     "install-deps": "pnpm install --strict-peer-dependencies=false",
