@@ -148,18 +148,17 @@ def process_generated_site(tesslate_response_content: str, project_final_path: s
         print(f"[{time.strftime('%H:%M:%S')}] No <Edit> blocks found to apply. Proceeding to build.")
 
     # --- Step 2: PERFORMANCE: Call the hybrid auto-fixer ONLY on modified files ---
-    auto_fix_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auto_fixer.ts")
+    auto_fix_script_path = os.path.join(project_final_path, "ts-morph-fixer.ts")
     if os.path.exists(auto_fix_script_path) and llm_modified_files:
         stage_name_auto_fix = "Auto Fix (Project-wide)"
         results["project_setup_stages"].append(stage_name_auto_fix)
-        script_parent_dir = os.path.dirname(auto_fix_script_path)
         
         # Pass the project path and the list of specific files to the TypeScript script
-        command_to_run = ["pnpm", "exec", "ts-node", auto_fix_script_path, project_final_path] + llm_modified_files
+        command_to_run = ["pnpm", "exec", "ts-node", "ts-morph-fixer.ts", project_final_path] + llm_modified_files
         
         auto_fix_success = _run_command_util(
             command_to_run,
-            cwd=script_parent_dir,
+            cwd=project_final_path,  # Run from project directory, not script parent dir
             results_dict=results,
             timeout=180,
             command_name=stage_name_auto_fix,
