@@ -11,8 +11,8 @@ def pytest_addoption(parser):
     parser.addoption(
         "--csv-output-field",
         action="store",
-        default="output_tesslate_response",
-        help="CSV field name for the LLM generated code (tesslate response)"
+        default="output_response",
+        help="CSV field name for the LLM generated code"
     )
     parser.addoption(
         "--csv-framework-field",
