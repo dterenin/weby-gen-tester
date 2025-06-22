@@ -149,30 +149,7 @@ def process_generated_site(tesslate_response_content: str, project_final_path: s
     if not llm_modified_files:
         print(f"[{time.strftime('%H:%M:%S')}] No <Edit> blocks found to apply. Proceeding to build.")
 
-    # --- Step 2: PERFORMANCE: Call the hybrid auto-fixer ONLY on modified files ---
-    auto_fix_script_path = os.path.join(project_final_path, "ts-morph-fixer.ts")
-    if os.path.exists(auto_fix_script_path) and llm_modified_files:
-        stage_name_auto_fix = "Auto Fix (Project-wide)"
-        results["project_setup_stages"].append(stage_name_auto_fix)
-        
-        # Pass the project path and the list of specific files to the TypeScript script
-        command_to_run = ["pnpm", "exec", "ts-node", "ts-morph-fixer.ts", project_final_path] + llm_modified_files
-        
-        auto_fix_success = _run_command_util(
-            command_to_run,
-            cwd=project_final_path,  # Run from project directory, not script parent dir
-            results_dict=results,
-            timeout=180,
-            command_name=stage_name_auto_fix,
-            check_on_error=False # The fixer script handles its own errors and exits non-zero
-        )
-        results["auto_fix_success"] = auto_fix_success
-        if not auto_fix_success:
-            results["error_messages"].append("Targeted auto fix script failed.")
-    elif not os.path.exists(auto_fix_script_path):
-        print(f"[{time.strftime('%H:%M:%S')}] Warning: Auto-fix script not found, skipping step.")
-
-    # --- Step 3: CRITICAL TEST: Install new dependencies specified by LLM ---
+    # --- Step 2: CRITICAL TEST: Install new dependencies specified by LLM ---
     # This step is essential to validate if the LLM correctly managed package.json
     stage_name_pnpm_install = "pnpm Install"
     results["project_setup_stages"].append(stage_name_pnpm_install)
@@ -187,6 +164,29 @@ def process_generated_site(tesslate_response_content: str, project_final_path: s
     if not pnpm_install_success:
         # No point in continuing if dependencies are broken
         return results
+
+    # --- Step 3: PERFORMANCE: Call the hybrid auto-fixer ONLY on modified files ---
+    auto_fix_script_path = os.path.join(project_final_path, "ts-morph-fixer.ts")
+    if os.path.exists(auto_fix_script_path) and llm_modified_files:
+        stage_name_auto_fix = "Auto Fix (Project-wide)"
+        results["project_setup_stages"].append(stage_name_auto_fix)
+        
+        # Pass the project path and the list of specific files to the TypeScript script
+        command_to_run = ["pnpm", "run", "fix", project_final_path] #+ llm_modified_files
+        
+        auto_fix_success = _run_command_util(
+            command_to_run,
+            cwd=project_final_path,  # Run from project directory, not script parent dir
+            results_dict=results,
+            timeout=180,
+            command_name=stage_name_auto_fix,
+            check_on_error=False # The fixer script handles its own errors and exits non-zero
+        )
+        results["auto_fix_success"] = auto_fix_success
+        if not auto_fix_success:
+            results["error_messages"].append("Targeted auto fix script failed.")
+    elif not os.path.exists(auto_fix_script_path):
+        print(f"[{time.strftime('%H:%M:%S')}] Warning: Auto-fix script not found, skipping step.")
 
     # --- Step 4: Run linters and formatters ---
     stage_name_eslint_fix = "ESLint Fix"
