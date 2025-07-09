@@ -69,7 +69,7 @@ async def call_weby_v1_generate(question: str, framework: str = "Nextjs", temper
                 "content": question
             }
         ],
-        "files": files,
+        "project_files": files,
         "temperature": temperature,
         "top_p": top_p,
         "framework": framework,

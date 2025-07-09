@@ -172,7 +172,7 @@ def process_generated_site(tesslate_response_content: str, project_final_path: s
         results["project_setup_stages"].append(stage_name_auto_fix)
         
         # Pass the project path and the list of specific files to the TypeScript script
-        command_to_run = ["pnpm", "run", "fix", project_final_path] #+ llm_modified_files
+        command_to_run = ["pnpm", "run", "fix"]#, project_final_path] + llm_modified_files
         
         auto_fix_success = _run_command_util(
             command_to_run,
